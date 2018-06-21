@@ -1,5 +1,3 @@
-// TODO: IMPORTANT: It turns out, that it is possible to blit directly to the
-//                  screen, so one should check this out!!!!
 #include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -32,6 +30,21 @@ static int first_item_height = 5;
 
 // TODO: Temporary
 static float global_screen_split_percentage = 0.8f;
+static float global_screen_split_percentage_delta = 0.01;
+
+union EditorWindow
+{
+    // TODO(Tomorrow): START HERE.
+    int contains_buffer;
+    struct
+    {
+
+    };
+    struct
+    {
+
+    };
+};
 
 // TODO: Check if any of these functions can fail and handle this.
 static int ResizeAndRedrawWindow()
@@ -46,9 +59,11 @@ static int ResizeAndRedrawWindow()
     assert(global_screen_split_percentage);
     int line_split_px = static_cast<int>(global_screen_split_percentage * global_window_w);
 
+    // TODO: This needs more abstraction when there are more splits, recusive
+    // splits etc, etc...
     SDL_Rect buffers[2];
     buffers[0] = { 0, 0, line_split_px, global_window_h };
-    buffers[1] = { line_split_px, 0, line_split_px, global_window_h };
+    buffers[1] = { line_split_px, 0, global_window_w - line_split_px, global_window_h };
 
     for (int i = 0; i < 2; ++i)
     {
@@ -79,9 +94,6 @@ static int ResizeAndRedrawWindow()
 static int HandleEvent(const SDL_Event &event)
 {
     int shouldQuit = 0;
-
-    // TODO: Move it to only some event cases!
-    ResizeAndRedrawWindow();
 
     switch (event.type)
     {
@@ -227,10 +239,12 @@ static int InitSDL()
 
 static int InitWindow(const int width, const int height)
 {
-    global_window = SDL_CreateWindow("Test",
+    global_window = SDL_CreateWindow("Editor",
                                      SDL_WINDOWPOS_UNDEFINED,
                                      SDL_WINDOWPOS_UNDEFINED,
                                      width, height, 0);
+    // NOTE(Testing): Sometimes it is good to set width and height to 0, 0 and
+    // test what happens when window is smallest possible.
 
     if (!global_window)
     {
@@ -238,7 +252,7 @@ static int InitWindow(const int width, const int height)
         return -1;
     }
 
-    // but instead of creating a renderer, we can draw directly to the screen
+    // Instead of creating a renderer, draw directly to the screen.
     global_screen = SDL_GetWindowSurface(global_window);
 
     if (!global_screen)
@@ -332,6 +346,22 @@ int main(void)
 
         if (HandleEvent(event))
             break;
+
+        if (global_screen_split_percentage > 0.9f)
+        {
+            global_screen_split_percentage = 0.89f;
+            global_screen_split_percentage_delta *= -1;
+        }
+        else if (global_screen_split_percentage < 0.1f)
+        {
+            global_screen_split_percentage = 0.11f;
+            global_screen_split_percentage_delta *= -1;
+        }
+
+        global_screen_split_percentage += global_screen_split_percentage_delta;
+
+        // Move it to some event occurences or make a dirty-bit system.
+        ResizeAndRedrawWindow();
     }
 
     TTF_Quit();
