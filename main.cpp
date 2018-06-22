@@ -23,14 +23,13 @@ static const int number_of_surfaces = 4;
 static SDL_Surface *text_surface[number_of_surfaces];
 
 // TODO: Differenciate vertical paddign from the top and from the bottom?
-static int font_size = 15;
+static int global_font_size = 15;
+
+#if 0
 static int vertical_padding = 5;
 static int horizontal_padding = 15;
 static int first_item_height = 5;
-
-// TODO: Temporary
-static float global_screen_split_percentage = .8f;
-static float global_screen_split_percentage_delta = .01;
+#endif
 
 enum WindowSplit { WIN_SPLIT_VERTCAL, WIN_SPLIT_HORIZONTAL };
 
@@ -69,10 +68,10 @@ struct EditorWindow
         struct
         {
             WindowSplit split;
-            int number_of_windows; // Must be less than: MAX_WINDOWS_ON_SPLI
+            int number_of_windows; // Must be < MAX_WINDOWS_ON_SPLI and >= 2
 
             // Splits percentages must be increasing and in range 0-1.
-            float splits_percentages[MAX_WINDOWS_ON_SPLIT];
+            float splits_percentages[MAX_WINDOWS_ON_SPLIT - 1];
             EditorWindow *split_windows[MAX_WINDOWS_ON_SPLIT];
         };
     };
@@ -88,11 +87,41 @@ static EditorBuffer global_buffers[256];
 static void InitializeFirstWindow()
 {
     // For now just create default, one window with single buffer.
+#if 0
     global_number_of_buffers = 1;
-    global_buffers[0] = { .color = 0x990000 };
+    global_buffers[0] = { .color = 0x991122 };
 
     global_number_of_windows = 1;
     global_windows_arr[0] = { .contains_buffer = 1, .buffer_ptr = global_buffers };
+#else
+    global_number_of_buffers = 3;
+    global_buffers[0] = { .color = 0x112299 };
+    global_buffers[1] = { .color = 0x991122 };
+    global_buffers[2] = { .color = 0x229911 };
+
+    global_number_of_windows = 5;
+    global_windows_arr[0] = EditorWindow {
+        .contains_buffer = 0,
+        .split = WindowSplit::WIN_SPLIT_HORIZONTAL,
+        .number_of_windows = 2,
+    };
+    global_windows_arr[0].split_windows[0] = global_windows_arr + 1;
+    global_windows_arr[0].split_windows[1] = global_windows_arr + 2;
+    global_windows_arr[0].splits_percentages[0] = .45f;
+
+    global_windows_arr[1] = { .contains_buffer = 1, .buffer_ptr = global_buffers };
+    global_windows_arr[2] = EditorWindow {
+        .contains_buffer = 0,
+        .split = WindowSplit::WIN_SPLIT_VERTCAL,
+        .number_of_windows = 2,
+    };
+    global_windows_arr[2].split_windows[0] = global_windows_arr + 3;
+    global_windows_arr[2].split_windows[1] = global_windows_arr + 4;
+    global_windows_arr[2].splits_percentages[0] = .3f;
+
+    global_windows_arr[3] = { .contains_buffer = 1, .buffer_ptr = global_buffers+1 };
+    global_windows_arr[4] = { .contains_buffer = 1, .buffer_ptr = global_buffers+2 };
+#endif
 }
 
 static void DrawBufferOnRect(const EditorBuffer &buffer, const Rect &rect)
@@ -109,7 +138,61 @@ static void DrawWindowOnRect(const EditorWindow &window, const Rect &rect)
     }
     else
     {
-        assert(false);
+        // Tells at which pixel one of the windows in the split ends.
+        // In range of (min_pos - max_pos);
+        int split_idx[MAX_WINDOWS_ON_SPLIT];
+
+        assert(window.number_of_windows >= 2);
+#if 0
+        for (int i = 0; i < window.number_of_windows; ++i)
+
+            assert(window.splits_percentages[i] > 0 &&
+                   window.splits_percentages[i] < 1 &&
+                   (i < window.number_of_windows-1
+                    ?  window.splits_percentages[i] < window.splits_percentages[i+1]
+                    : 1));
+#endif
+        int min_pos = (window.split == WindowSplit::WIN_SPLIT_HORIZONTAL
+                       ? rect.x : rect.y);
+        int max_pos = (window.split == WindowSplit::WIN_SPLIT_HORIZONTAL
+                       ? rect.x + rect.width : rect.y + rect.height);
+        int difference = max_pos - min_pos;
+        assert(difference > 0);
+
+        for (int i = 0; i < window.number_of_windows-1; ++i)
+        {
+            split_idx[i] =
+                min_pos + static_cast<int>(window.splits_percentages[i] * difference);
+            // There is a one pixel space for splitting line.
+            if (i > 0)
+                split_idx[i] += 1;
+
+            assert(min_pos < split_idx[i] && split_idx[i] < max_pos);
+        }
+        split_idx[window.number_of_windows-1] = max_pos;
+
+        int previous_split = min_pos;
+        for (int i = 0; i < window.number_of_windows; ++i)
+        {
+            Rect rect_to_draw_recusive_window =
+                (window.split == WindowSplit::WIN_SPLIT_HORIZONTAL
+                 ? Rect { previous_split, rect.y, split_idx[i]-previous_split, rect.height }
+                 : Rect { rect.x, previous_split, rect.width, split_idx[i]-previous_split });
+
+            // TODO: Move outside the loop for better performace?
+
+            if (i < window.number_of_windows - 1)
+            {
+                SDL_Rect split_line =
+                    (window.split == WindowSplit::WIN_SPLIT_HORIZONTAL
+                     ? SDL_Rect { split_idx[i]-previous_split, rect.y, 1, rect.height }
+                     : SDL_Rect { rect.x, split_idx[i]-previous_split, rect.width, 1 });
+                SDL_FillRect(global_screen, &split_line, 0x64645e);
+            }
+
+            previous_split = split_idx[i]+1; // Add 1 becasue this is a space for the line separator.
+            DrawWindowOnRect(* window.split_windows[i], rect_to_draw_recusive_window);
+        }
     }
 }
 
@@ -387,7 +470,7 @@ int main(void)
 #endif
 
     TTF_Font *font_test =
-        TTF_OpenFont("/usr/share/fonts/TTF/DejaVuSansMono.ttf", font_size);
+        TTF_OpenFont("/usr/share/fonts/TTF/DejaVuSansMono.ttf", global_font_size);
 
     if (!(text_surface[0] = TTF_RenderText_Solid(font_test,
                                                  "This text is: Solid",
@@ -425,18 +508,18 @@ int main(void)
         if (HandleEvent(event))
             break;
 
-        if (global_screen_split_percentage > 0.9f)
+        static float diff = 0.01f;
+        global_windows_arr[0].splits_percentages[0] += diff;
+        if (global_windows_arr[0].splits_percentages[0] > 0.9f)
         {
-            global_screen_split_percentage = 0.89f;
-            global_screen_split_percentage_delta *= -1;
+            global_windows_arr[0].splits_percentages[0] = 0.9f;
+            diff *= -1;
         }
-        else if (global_screen_split_percentage < 0.1f)
+        else if (global_windows_arr[0].splits_percentages[0] < 0.1f)
         {
-            global_screen_split_percentage = 0.11f;
-            global_screen_split_percentage_delta *= -1;
+            global_windows_arr[0].splits_percentages[0] = 0.1f;
+            diff *= -1;
         }
-
-        global_screen_split_percentage += global_screen_split_percentage_delta;
 
         // Move it to some event occurences or make a dirty-bit system.
         ResizeAndRedrawWindow();
