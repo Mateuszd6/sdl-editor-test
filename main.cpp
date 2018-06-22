@@ -25,6 +25,9 @@ static SDL_Surface *text_surface[number_of_surfaces];
 // TODO: Differenciate vertical paddign from the top and from the bottom?
 static int global_font_size = 15;
 
+// Index of window that displays currently selected buffer.
+static int global_buffer_window_idx;
+
 #if 0
 static int vertical_padding = 5;
 static int horizontal_padding = 15;
@@ -87,13 +90,6 @@ static EditorBuffer global_buffers[256];
 static void InitializeFirstWindow()
 {
     // For now just create default, one window with single buffer.
-#if 0
-    global_number_of_buffers = 1;
-    global_buffers[0] = { .color = 0x991122 };
-
-    global_number_of_windows = 1;
-    global_windows_arr[0] = { .contains_buffer = 1, .buffer_ptr = global_buffers };
-#else
     global_number_of_buffers = 3;
     global_buffers[0] = { .color = 0x112299 };
     global_buffers[1] = { .color = 0x991122 };
@@ -109,6 +105,7 @@ static void InitializeFirstWindow()
     global_windows_arr[0].split_windows[1] = global_windows_arr + 2;
     global_windows_arr[0].splits_percentages[0] = .45f;
 
+    // This is a buffer selected on start:
     global_windows_arr[1] = { .contains_buffer = 1, .buffer_ptr = global_buffers };
     global_windows_arr[2] = EditorWindow {
         .contains_buffer = 0,
@@ -121,7 +118,8 @@ static void InitializeFirstWindow()
 
     global_windows_arr[3] = { .contains_buffer = 1, .buffer_ptr = global_buffers+1 };
     global_windows_arr[4] = { .contains_buffer = 1, .buffer_ptr = global_buffers+2 };
-#endif
+
+    global_buffer_window_idx = 1;
 }
 
 static void DrawBufferOnRect(const EditorBuffer &buffer, const Rect &rect)
@@ -264,7 +262,31 @@ static int HandleEvent(const SDL_Event &event)
 
         case SDL_KEYDOWN:
         {
+#if 1
+            SDL_Log("Current window: %d (with color: %x)",
+                    global_buffer_window_idx,
+                    global_windows_arr[global_buffer_window_idx].buffer_ptr
+                        ->color);
+            if (event.key.keysym.sym == 119)
+            {
+                // TODO: Do we assume that there is at least one buffer at a
+                // time?
+                assert(global_number_of_buffers);
+
+                int next_window_idx = global_buffer_window_idx;
+                do
+                {
+                    next_window_idx++;
+                    if (next_window_idx >= global_number_of_windows)
+                        next_window_idx = 0;
+                } while (!global_windows_arr[next_window_idx].contains_buffer
+                         && next_window_idx != global_buffer_window_idx);
+
+                global_buffer_window_idx = next_window_idx;
+            }
+#else
             SDL_Log("KEY DOWN %d\n", event.key.keysym.sym);
+#endif
         } break;
 
         case SDL_KEYUP:
