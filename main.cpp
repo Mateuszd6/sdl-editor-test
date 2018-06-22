@@ -95,6 +95,24 @@ static void InitializeFirstWindow()
     global_windows_arr[0] = { .contains_buffer = 1, .buffer_ptr = global_buffers };
 }
 
+static void DrawBufferOnRect(const EditorBuffer &buffer, const Rect &rect)
+{
+    const SDL_Rect sdl_rect = { rect.x, rect.y, rect.width, rect.height };
+    SDL_FillRect(global_screen, &sdl_rect, buffer.color);
+}
+
+static void DrawWindowOnRect(const EditorWindow &window, const Rect &rect)
+{
+    if (window.contains_buffer)
+    {
+        DrawBufferOnRect(* window.buffer_ptr, rect);
+    }
+    else
+    {
+        assert(false);
+    }
+}
+
 // TODO: Check if any of these functions can fail and handle this.
 static int ResizeAndRedrawWindow()
 {
@@ -142,9 +160,9 @@ static int ResizeAndRedrawWindow()
 #endif
 
     assert(global_number_of_windows > 0);
-    const WindowSplit main_window = global_windows_arr[0];
+    const EditorWindow main_window = global_windows_arr[0];
 
-
+    DrawWindowOnRect(main_window, Rect { 0, 0, global_window_w, global_window_h });
 
     return 0;
 }
