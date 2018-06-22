@@ -29,34 +29,86 @@ static int horizontal_padding = 15;
 static int first_item_height = 5;
 
 // TODO: Temporary
-static float global_screen_split_percentage = 0.8f;
-static float global_screen_split_percentage_delta = 0.01;
+static float global_screen_split_percentage = .8f;
+static float global_screen_split_percentage_delta = .01;
 
-union EditorWindow
+enum WindowSplit { WIN_SPLIT_VERTCAL, WIN_SPLIT_HORIZONTAL };
+
+struct Rect
 {
-    // TODO(Tomorrow): START HERE.
+    int x;
+    int y;
+    int width;
+    int height;
+};
+
+struct EditorBuffer
+{
+    int color;
+};
+
+// TODO: Is this too small limitation?
+#define MAX_WINDOWS_ON_SPLIT (4)
+
+struct EditorWindow
+{
+    // If 0, window is splited to multiple windows, either vertically or
+    // horizontally. Otherwise pointer to buffer, that is displayed in window is
+    // stored.
     int contains_buffer;
-    struct
-    {
 
-    };
-    struct
+    union
     {
+        // If contains single buffer:
+        struct
+        {
+            EditorBuffer *buffer_ptr;
+        };
 
+        // If is splited into multiple windows:
+        struct
+        {
+            WindowSplit split;
+            int number_of_windows; // Must be less than: MAX_WINDOWS_ON_SPLI
+
+            // Splits percentages must be increasing and in range 0-1.
+            float splits_percentages[MAX_WINDOWS_ON_SPLIT];
+            EditorWindow *split_windows[MAX_WINDOWS_ON_SPLIT];
+        };
     };
 };
+
+// Window at index 0 is main window, created on init and it cannot be removed.
+static int global_number_of_windows = 0;
+static EditorWindow global_windows_arr[16];
+
+static int global_number_of_buffers = 0;
+static EditorBuffer global_buffers[256];
+
+static void InitializeFirstWindow()
+{
+    // For now just create default, one window with single buffer.
+    global_number_of_buffers = 1;
+    global_buffers[0] = { .color = 0x990000 };
+
+    global_number_of_windows = 1;
+    global_windows_arr[0] = { .contains_buffer = 1, .buffer_ptr = global_buffers };
+}
 
 // TODO: Check if any of these functions can fail and handle this.
 static int ResizeAndRedrawWindow()
 {
+    // TODO: Update the screen surface and its size. When this changes, whole
+    // screen needs to be redrawn, otherwise just some part of it, so this
+    // funcion will probobly need to be splited into smaller parts!
     SDL_UpdateWindowSurface(global_window);
     global_screen = SDL_GetWindowSurface(global_window);
     SDL_GetWindowSize(global_window, &global_window_w, &global_window_h);
-
+    // Fill the whole screen, just in case.
     const SDL_Rect whole_screen = { 0, 0, global_window_w, global_window_h };
     SDL_FillRect(global_screen, &whole_screen, 0x171812); // Monokai theme: 0x272822
 
-    assert(global_screen_split_percentage);
+#if 0
     int line_split_px = static_cast<int>(global_screen_split_percentage * global_window_w);
 
     // TODO: This needs more abstraction when there are more splits, recusive
@@ -87,6 +139,12 @@ static int ResizeAndRedrawWindow()
 
     for (int i = 0; i < number_of_surfaces; ++i)
         SDL_BlitSurface(text_surface[i], nullptr, global_screen, rects + i);
+#endif
+
+    assert(global_number_of_windows > 0);
+    const WindowSplit main_window = global_windows_arr[0];
+
+
 
     return 0;
 }
@@ -239,12 +297,12 @@ static int InitSDL()
 
 static int InitWindow(const int width, const int height)
 {
+    // NOTE(Testing): Sometimes it is good to set width and height to 0, 0 and
+    // test what happens when window is smallest possible.
     global_window = SDL_CreateWindow("Editor",
                                      SDL_WINDOWPOS_UNDEFINED,
                                      SDL_WINDOWPOS_UNDEFINED,
                                      width, height, 0);
-    // NOTE(Testing): Sometimes it is good to set width and height to 0, 0 and
-    // test what happens when window is smallest possible.
 
     if (!global_window)
     {
@@ -297,8 +355,10 @@ int main(void)
         // TODO: Logging.
         exit(1);
     }
-
     SDL_SetWindowPosition(global_window, window_x, window_y);
+
+
+    InitializeFirstWindow();
 
     // TODO: Make it same as background color!
     const SDL_Rect foo = { 0, 0, global_window_w, global_window_h };
