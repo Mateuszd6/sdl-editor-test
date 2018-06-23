@@ -26,7 +26,7 @@ static SDL_Surface *text_surface[number_of_surfaces];
 static int global_font_size = 15;
 
 // Index of window that displays currently selected buffer.
-static int global_buffer_window_idx;
+static int global_current_window_idx;
 
 #if 0
 static int vertical_padding = 5;
@@ -90,10 +90,12 @@ static EditorBuffer global_buffers[256];
 static void InitializeFirstWindow()
 {
     // For now just create default, one window with single buffer.
-    global_number_of_buffers = 3;
-    global_buffers[0] = { .color = 0x112299 };
-    global_buffers[1] = { .color = 0x991122 };
-    global_buffers[2] = { .color = 0x229911 };
+#if 0
+    global_number_of_buffers = 4;
+    global_buffers[0] = { .color = 0xffffff };
+    global_buffers[1] = { .color = 0xffffff };
+    global_buffers[2] = { .color = 0xffffff };
+    global_buffers[3] = { .color = 0xffffff };
 
     global_number_of_windows = 5;
     global_windows_arr[0] = EditorWindow {
@@ -106,7 +108,7 @@ static void InitializeFirstWindow()
     global_windows_arr[0].splits_percentages[0] = .45f;
 
     // This is a buffer selected on start:
-    global_windows_arr[1] = { .contains_buffer = 1, .buffer_ptr = global_buffers };
+    global_windows_arr[1] = { .contains_buffer = 1, .buffer_ptr = global_buffers+1 } ;
     global_windows_arr[2] = EditorWindow {
         .contains_buffer = 0,
         .split = WindowSplit::WIN_SPLIT_VERTCAL,
@@ -116,23 +118,60 @@ static void InitializeFirstWindow()
     global_windows_arr[2].split_windows[1] = global_windows_arr + 4;
     global_windows_arr[2].splits_percentages[0] = .3f;
 
-    global_windows_arr[3] = { .contains_buffer = 1, .buffer_ptr = global_buffers+1 };
-    global_windows_arr[4] = { .contains_buffer = 1, .buffer_ptr = global_buffers+2 };
+    global_windows_arr[3] = { .contains_buffer = 1, .buffer_ptr = global_buffers+2 };
+    global_windows_arr[4] = { .contains_buffer = 1, .buffer_ptr = global_buffers+3 };
 
-    global_buffer_window_idx = 1;
+    global_current_window_idx = 1;
+#endif
+
+    global_number_of_buffers = 2;
+    global_buffers[0] = { .color = 0xffff00 }; // Buffer with index 0 is a minibufer.
+    global_buffers[1] = { .color = 0xffffff };
+
+    global_number_of_windows = 3;
+
+    // Window with index 0 contains minibuffer. And is drawn separetely.
+    global_windows_arr[0] = EditorWindow {
+        .contains_buffer = 1,
+        .buffer_ptr = global_buffers
+    };
+
+    // Window with index 1 is main window.
+    global_windows_arr[1] = EditorWindow {
+        .contains_buffer = 1,
+        .buffer_ptr = global_buffers + 1 // We start with a single buffer for now.
+    };
+
+    global_current_window_idx = 1;
 }
 
-static void DrawBufferOnRect(const EditorBuffer &buffer, const Rect &rect)
+static void DrawSplittingLine(const Rect &rect)
+{
+    SDL_Rect split_line = SDL_Rect { rect.x, rect.y, rect.width, rect.height };
+    SDL_FillRect(global_screen, &split_line, 0x64645e);
+}
+
+static void DrawBufferOnRect(const EditorBuffer &buffer,
+                             const Rect &rect,
+                             const bool current_select)
 {
     const SDL_Rect sdl_rect = { rect.x, rect.y, rect.width, rect.height };
     SDL_FillRect(global_screen, &sdl_rect, buffer.color);
+
+    if (current_select)
+    {
+        const SDL_Rect selection_rect = { rect.x + 5, rect.y + 5, rect.width - 10, rect.height - 10 };
+        SDL_FillRect(global_screen, &selection_rect, 0x992211);
+    }
 }
 
-static void DrawWindowOnRect(const EditorWindow &window, const Rect &rect)
+static void DrawWindowOnRect(const EditorWindow &window,
+                             const Rect &rect,
+                             const bool is_selected)
 {
     if (window.contains_buffer)
     {
-        DrawBufferOnRect(* window.buffer_ptr, rect);
+        DrawBufferOnRect(* window.buffer_ptr, rect, is_selected);
     }
     else
     {
@@ -141,15 +180,14 @@ static void DrawWindowOnRect(const EditorWindow &window, const Rect &rect)
         int split_idx[MAX_WINDOWS_ON_SPLIT];
 
         assert(window.number_of_windows >= 2);
-#if 0
-        for (int i = 0; i < window.number_of_windows; ++i)
 
+        for (int i = 0; i < window.number_of_windows-1; ++i)
             assert(window.splits_percentages[i] > 0 &&
                    window.splits_percentages[i] < 1 &&
-                   (i < window.number_of_windows-1
-                    ?  window.splits_percentages[i] < window.splits_percentages[i+1]
+                   (i < window.number_of_windows-2
+                    ? window.splits_percentages[i] < window.splits_percentages[i+1]
                     : 1));
-#endif
+
         int min_pos = (window.split == WindowSplit::WIN_SPLIT_HORIZONTAL
                        ? rect.x : rect.y);
         int max_pos = (window.split == WindowSplit::WIN_SPLIT_HORIZONTAL
@@ -178,18 +216,19 @@ static void DrawWindowOnRect(const EditorWindow &window, const Rect &rect)
                  : Rect { rect.x, previous_split, rect.width, split_idx[i]-previous_split });
 
             // TODO: Move outside the loop for better performace?
-
             if (i < window.number_of_windows - 1)
             {
-                SDL_Rect split_line =
-                    (window.split == WindowSplit::WIN_SPLIT_HORIZONTAL
-                     ? SDL_Rect { split_idx[i]-previous_split, rect.y, 1, rect.height }
-                     : SDL_Rect { rect.x, split_idx[i]-previous_split, rect.width, 1 });
-                SDL_FillRect(global_screen, &split_line, 0x64645e);
+                Rect splitting_rect = (window.split == WindowSplit::WIN_SPLIT_HORIZONTAL
+                     ? Rect { split_idx[i]-previous_split, rect.y, 1, rect.height }
+                     : Rect { rect.x, split_idx[i]-previous_split, rect.width, 1 });
+
+                DrawSplittingLine(splitting_rect);
             }
 
             previous_split = split_idx[i]+1; // Add 1 becasue this is a space for the line separator.
-            DrawWindowOnRect(* window.split_windows[i], rect_to_draw_recusive_window);
+            DrawWindowOnRect(* window.split_windows[i],
+                             rect_to_draw_recusive_window,
+                             global_windows_arr + global_current_window_idx == window.split_windows[i]);
         }
     }
 }
@@ -205,7 +244,7 @@ static int ResizeAndRedrawWindow()
     SDL_GetWindowSize(global_window, &global_window_w, &global_window_h);
     // Fill the whole screen, just in case.
     const SDL_Rect whole_screen = { 0, 0, global_window_w, global_window_h };
-    SDL_FillRect(global_screen, &whole_screen, 0x171812); // Monokai theme: 0x272822
+    SDL_FillRect(global_screen, &whole_screen, 0xff00ff); // Color suggesting error.
 
 #if 0
     int line_split_px = static_cast<int>(global_screen_split_percentage * global_window_w);
@@ -241,11 +280,76 @@ static int ResizeAndRedrawWindow()
 #endif
 
     assert(global_number_of_windows > 0);
-    const EditorWindow main_window = global_windows_arr[0];
+    const EditorWindow main_window = global_windows_arr[1];
+    const EditorWindow mini_buffer_window = global_windows_arr[0];
 
-    DrawWindowOnRect(main_window, Rect { 0, 0, global_window_w, global_window_h });
+    DrawSplittingLine({ 0, global_window_h - 17, global_window_w, 1 });
+
+    // Minibufer takes the fixed size of the window, so we draw it first, here:
+    DrawWindowOnRect(mini_buffer_window,
+                     Rect { 0, global_window_h - 17 +1, global_window_w, 17 },
+                     false);
+
+    DrawWindowOnRect(main_window,
+                     Rect { 0, 0, global_window_w, global_window_h - 17 },
+                     false);
 
     return 0;
+}
+
+static int global_window_idx_before_entering_minibuffer;
+
+static void SwitchToNextWidnow()
+{
+    if (global_current_window_idx == 0)
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "\e[91;1mCannot switch window in minibuffer!\e[0m");
+        return;
+    }
+
+    // TODO: Do we assume there is at least one buffer at a time?
+    assert(global_number_of_buffers);
+
+    int next_window_idx = global_current_window_idx;
+    do
+    {
+        next_window_idx++;
+        if (next_window_idx >= global_number_of_windows)
+            next_window_idx = 1;
+    } while (!global_windows_arr[next_window_idx].contains_buffer
+             && next_window_idx != global_current_window_idx);
+
+
+    if (global_current_window_idx == next_window_idx)
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                     "\e[93;1mWindow unchanged, because there is no other window!\e[0m");
+    }
+
+    global_current_window_idx = next_window_idx;
+}
+
+static void SwitchToMiniBuffer()
+{
+    if (global_current_window_idx == 0)
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "\e[91;1mAlready in minibuffer\e[0m");
+        return;
+    }
+
+    global_window_idx_before_entering_minibuffer = global_current_window_idx;
+    global_current_window_idx = 0;
+}
+
+static void SwitchOutFromMiniBuffer()
+{
+    if (global_current_window_idx != 0)
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "\e[91;1mNot in minibuffer\e[0m");
+        return;
+    }
+
+    global_current_window_idx = global_window_idx_before_entering_minibuffer;
 }
 
 static int HandleEvent(const SDL_Event &event)
@@ -263,27 +367,23 @@ static int HandleEvent(const SDL_Event &event)
         case SDL_KEYDOWN:
         {
 #if 1
-            SDL_Log("Current window: %d (with color: %x)",
-                    global_buffer_window_idx,
-                    global_windows_arr[global_buffer_window_idx].buffer_ptr
-                        ->color);
             if (event.key.keysym.sym == 119)
             {
-                // TODO: Do we assume that there is at least one buffer at a
-                // time?
-                assert(global_number_of_buffers);
-
-                int next_window_idx = global_buffer_window_idx;
-                do
-                {
-                    next_window_idx++;
-                    if (next_window_idx >= global_number_of_windows)
-                        next_window_idx = 0;
-                } while (!global_windows_arr[next_window_idx].contains_buffer
-                         && next_window_idx != global_buffer_window_idx);
-
-                global_buffer_window_idx = next_window_idx;
+                SwitchToNextWidnow();
             }
+            else if (event.key.keysym.sym == 120)
+            {
+                SwitchToMiniBuffer();
+            }
+            else if (event.key.keysym.sym == 103)
+            {
+                SwitchOutFromMiniBuffer();
+            }
+
+            SDL_Log("Current window: %d (with color: %x)",
+                    global_current_window_idx,
+                    global_windows_arr[global_current_window_idx].buffer_ptr
+                    ->color);
 #else
             SDL_Log("KEY DOWN %d\n", event.key.keysym.sym);
 #endif
