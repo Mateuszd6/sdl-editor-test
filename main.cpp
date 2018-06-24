@@ -69,15 +69,16 @@ struct EditorWindow
     // stored.
     int contains_buffer;
 
+    // A pointer to the splitting window, which owns this one, or
+    // nullptr, if this is a top window. (If nullptr, there should be
+    // only one window in the screen (expect minibuffer)).
+    EditorWindow *parent_ptr;
+
     union
     {
         struct // If contains single buffer:
         {
             EditorBuffer *buffer_ptr;
-            // A pointer to the splitting window, which owns this one, or NULL,
-            // If this is a top window. (If NULL, there should be only one
-            // window in the screen (expect minibuffer)).
-            EditorWindow *parent_ptr;
         };
         struct // If is splited into multiple windows:
         {
@@ -106,11 +107,13 @@ static EditorBuffer *CreateNewBuffer()
     return global_buffers + global_number_of_buffers - 1;
 }
 
-static EditorWindow *CreateNewWindowWithBuffer(EditorBuffer *buffer)
+static EditorWindow *CreateNewWindowWithBuffer(EditorBuffer *buffer,
+                                               EditorWindow *root_window)
 {
     global_windows_arr[global_number_of_windows++] = EditorWindow {
         .contains_buffer = 1,
-        .buffer_ptr = buffer
+        .buffer_ptr = buffer,
+        .parent_ptr = root_window
     };
 
     return global_windows_arr + global_number_of_windows - 1;
@@ -124,12 +127,12 @@ void EditorWindow::SplitWindow(WindowSplit split_type)
     if (contains_buffer)
     {
         EditorBuffer *previous_buffer_ptr = buffer_ptr;
-        this->contains_buffer = 0;
-        this->split = split_type;
-        this->splits_percentages[0] = 0.5f;
-        this->split_windows[0] = CreateNewWindowWithBuffer(previous_buffer_ptr);
-        this->split_windows[1] = CreateNewWindowWithBuffer(CreateNewBuffer());
-        this->number_of_windows = 2;
+        contains_buffer = 0;
+        split = split_type;
+        splits_percentages[0] = 0.5f;
+        split_windows[0] = CreateNewWindowWithBuffer(previous_buffer_ptr, this);
+        split_windows[1] = CreateNewWindowWithBuffer(CreateNewBuffer(), this);
+        number_of_windows = 2;
 
         global_current_window_idx = split_windows[0] - global_windows_arr;
     }
@@ -142,42 +145,6 @@ void EditorWindow::SplitWindow(WindowSplit split_type)
 
 static void InitializeFirstWindow()
 {
-#if 0
-    global_number_of_buffers = 3;
-    global_buffers[0] = { .color = 0xffffff }; // Buffer with index 0 is a minibufer.
-    global_buffers[1] = { .color = WINDOW_COLOR };
-    global_buffers[2] = { .color = WINDOW_COLOR };
-
-    global_number_of_windows = 4;
-
-    // Window with index 0 contains minibuffer. And is drawn separetely.
-    global_windows_arr[0] = EditorWindow {
-        .contains_buffer = 1,
-        .buffer_ptr = global_buffers
-    };
-
-    // Window with index 1 is main window.
-    global_windows_arr[1] = EditorWindow {
-        .contains_buffer = 0,
-        .split = WindowSplit::WIN_SPLIT_HORIZONTAL,
-        .number_of_windows = 2
-    };
-    global_windows_arr[1].splits_percentages[0] = 0.5f;
-    global_windows_arr[1].split_windows[0] = global_windows_arr + 2;
-    global_windows_arr[1].split_windows[1] = global_windows_arr + 3;
-
-    global_windows_arr[2] = EditorWindow {
-        .contains_buffer = 1,
-        .buffer_ptr = global_buffers + 1
-    };
-
-    global_windows_arr[3] = EditorWindow {
-        .contains_buffer = 1,
-        .buffer_ptr = global_buffers + 2
-    };
-
-    global_current_window_idx = 1;
-#else
     global_number_of_buffers = 2;
     global_buffers[0] = { .color = 0xffffff }; // Buffer with index 0 is a minibufer.
     global_buffers[1] = { .color = WINDOW_COLOR };
@@ -187,17 +154,18 @@ static void InitializeFirstWindow()
     // Window with index 0 contains minibuffer. And is drawn separetely.
     global_windows_arr[0] = EditorWindow {
         .contains_buffer = 1,
-        .buffer_ptr = global_buffers
+        .buffer_ptr = global_buffers,
+        .parent_ptr = nullptr,
     };
 
     // Window with index 1 is main window.
     global_windows_arr[1] = EditorWindow {
         .contains_buffer = 1,
-        .buffer_ptr = global_buffers + 1
+        .buffer_ptr = global_buffers + 1,
+        .parent_ptr = nullptr
     };
 
     global_current_window_idx = 1;
-#endif
 }
 
 static void DrawSplittingLine(const Rect &rect)
@@ -285,7 +253,8 @@ static void DrawWindowOnRect(const EditorWindow &window,
                 DrawSplittingLine(splitting_rect);
             }
 
-            previous_split = split_idx[i]+1; // Add 1 becasue this is a space for the line separator.
+            // Add 1 becasue this is a space for the line separator.
+            previous_split = split_idx[i]+1;
             DrawWindowOnRect(* window.split_windows[i],
                              rect_to_draw_recusive_window,
                              global_windows_arr + global_current_window_idx == window.split_windows[i]);
@@ -337,17 +306,65 @@ static int ResizeAndRedrawWindow()
 
 static int global_window_idx_before_entering_minibuffer;
 
+// Set active first window to given root window.
+static EditorWindow *GetFirstWindowInSubtree(EditorWindow *root_window)
+{
+    // If root window is a bufer, it is just selected.
+    if (root_window->contains_buffer)
+        return root_window;
+
+    EditorWindow *next_window = root_window;
+    while (!next_window->contains_buffer)
+        next_window = next_window->split_windows[0];
+
+    return next_window;
+}
+
+static EditorWindow *GetNextActiveWindow(const EditorWindow *current_window)
+{
+    EditorWindow *parent = current_window->parent_ptr;
+    if (!parent)
+    {
+        return GetFirstWindowInSubtree(global_windows_arr + 1);
+    }
+
+    // Parent must be splited window.
+    assert(!parent->contains_buffer);
+
+    int index_in_parent = -1;
+    for (int i = 0; i < parent->number_of_windows; ++i)
+        if (parent->split_windows[i] == current_window)
+        {
+            index_in_parent = i;
+            break;
+        }
+
+    assert(index_in_parent >= 0);
+    if (index_in_parent + 1 >= parent->number_of_windows)
+    {
+        // Last window in this split - we must go to the upper window and search
+        // the next one recusively.
+        return GetFirstWindowInSubtree(GetNextActiveWindow(parent));
+    }
+    else
+    {
+        return parent->split_windows[index_in_parent + 1];
+    }
+}
+
 static void SwitchToNextWidnow()
 {
     if (global_current_window_idx == 0)
     {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "\e[91;1mCannot switch window in minibuffer!\e[0m");
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                     "\e[91;1mCannot switch window in minibuffer!\e[0m");
         return;
     }
 
     // TODO: Do we assume there is at least one buffer at a time?
     assert(global_number_of_buffers);
 
+#if 0
     int next_window_idx = global_current_window_idx;
     do
     {
@@ -363,19 +380,26 @@ static void SwitchToNextWidnow()
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
                      "\e[93;1mWindow unchanged, because there is no other window!\e[0m");
     }
-
     global_current_window_idx = next_window_idx;
+#else
+    EditorWindow *next_window  =
+        GetNextActiveWindow(global_windows_arr + global_current_window_idx);
+
+    global_current_window_idx = next_window - global_windows_arr;
+#endif
 }
 
 static void SwitchToMiniBuffer()
 {
     if (global_current_window_idx == 0)
     {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "\e[91;1mAlready in minibuffer\e[0m");
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                     "\e[91;1mAlready in minibuffer\e[0m");
         return;
     }
 
-    global_window_idx_before_entering_minibuffer = global_current_window_idx;
+    global_window_idx_before_entering_minibuffer
+        = global_current_window_idx;
     global_current_window_idx = 0;
 }
 
@@ -383,11 +407,13 @@ static void SwitchOutFromMiniBuffer()
 {
     if (global_current_window_idx != 0)
     {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "\e[91;1mNot in minibuffer\e[0m");
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                     "\e[91;1mNot in minibuffer\e[0m");
         return;
     }
 
-    global_current_window_idx = global_window_idx_before_entering_minibuffer;
+    global_current_window_idx
+        = global_window_idx_before_entering_minibuffer;
 }
 
 static int HandleEvent(const SDL_Event &event)
@@ -405,6 +431,7 @@ static int HandleEvent(const SDL_Event &event)
         case SDL_KEYDOWN:
         {
 #if 1
+            // W - switch window.
             if (event.key.keysym.sym == 119)
             {
                 SwitchToNextWidnow();
