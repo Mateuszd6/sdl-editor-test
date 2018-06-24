@@ -5,8 +5,15 @@
 #include <SDL.h>
 #include <SDL_ttf.h>
 
+// #define RANDOM_WINDOW_COLORS
+
+#ifdef RANDOM_WINDOW_COLORS
 // TODO: Temporary.
 #include <time.h>
+#define WINDOW_COLOR (rand())
+#else
+#define WINDOW_COLOR (0xffffff)
+#endif
 
 // TODO: Move to other config file!
 #define SUCCEEDED(expr_res) (static_cast<int>(expr_res) >= 0)
@@ -64,18 +71,19 @@ struct EditorWindow
 
     union
     {
-        // If contains single buffer:
-        struct
+        struct // If contains single buffer:
         {
             EditorBuffer *buffer_ptr;
+            // A pointer to the splitting window, which owns this one, or NULL,
+            // If this is a top window. (If NULL, there should be only one
+            // window in the screen (expect minibuffer)).
+            EditorWindow *parent_ptr;
         };
-
-        // If is splited into multiple windows:
-        struct
+        struct // If is splited into multiple windows:
         {
             WindowSplit split;
-            int number_of_windows; // Must be < MAX_WINDOWS_ON_SPLI and >= 2
-
+            // Must be < MAX_WINDOWS_ON_SPLI and >= 2
+            int number_of_windows;
             // Splits percentages must be increasing and in range 0-1.
             float splits_percentages[MAX_WINDOWS_ON_SPLIT - 1];
             EditorWindow *split_windows[MAX_WINDOWS_ON_SPLIT];
@@ -86,15 +94,15 @@ struct EditorWindow
 };
 
 // Window at index 0 is main window, created on init and it cannot be removed.
+// TODO: Make these auto-resizable and think about initial size.
 static int global_number_of_windows = 0;
-static EditorWindow global_windows_arr[16];
-
+static EditorWindow global_windows_arr[256];
 static int global_number_of_buffers = 0;
 static EditorBuffer global_buffers[256];
 
 static EditorBuffer *CreateNewBuffer()
 {
-    global_buffers[global_number_of_buffers++] = { .color = rand() };
+    global_buffers[global_number_of_buffers++] = { .color = WINDOW_COLOR };
     return global_buffers + global_number_of_buffers - 1;
 }
 
@@ -108,7 +116,7 @@ static EditorWindow *CreateNewWindowWithBuffer(EditorBuffer *buffer)
     return global_windows_arr + global_number_of_windows - 1;
 }
 
-// TODO: This window must contain buffer!
+// NOTE: This window must contain buffer!
 // NOTE: This heavily assumes that this window is the active one.
 // This focus is set to the buffer that is in the window before the split.
 void EditorWindow::SplitWindow(WindowSplit split_type)
@@ -126,7 +134,10 @@ void EditorWindow::SplitWindow(WindowSplit split_type)
         global_current_window_idx = split_windows[0] - global_windows_arr;
     }
     else
+    {
+        // TODO: Info, that something has gone horribly wrong...
         assert(false);
+    }
 }
 
 static void InitializeFirstWindow()
@@ -134,8 +145,8 @@ static void InitializeFirstWindow()
 #if 0
     global_number_of_buffers = 3;
     global_buffers[0] = { .color = 0xffffff }; // Buffer with index 0 is a minibufer.
-    global_buffers[1] = { .color = rand() };
-    global_buffers[2] = { .color = rand() };
+    global_buffers[1] = { .color = WINDOW_COLOR };
+    global_buffers[2] = { .color = WINDOW_COLOR };
 
     global_number_of_windows = 4;
 
@@ -169,7 +180,7 @@ static void InitializeFirstWindow()
 #else
     global_number_of_buffers = 2;
     global_buffers[0] = { .color = 0xffffff }; // Buffer with index 0 is a minibufer.
-    global_buffers[1] = { .color = rand() };
+    global_buffers[1] = { .color = WINDOW_COLOR };
 
     global_number_of_windows = 4;
 
@@ -202,6 +213,7 @@ static void DrawBufferOnRect(const EditorBuffer &buffer,
     const SDL_Rect sdl_rect = { rect.x, rect.y, rect.width, rect.height };
     SDL_FillRect(global_screen, &sdl_rect, current_select ? 0xddee22 : buffer.color);
 
+#if 0
     if (current_select)
     {
         const SDL_Rect selection_rect = {
@@ -210,6 +222,7 @@ static void DrawBufferOnRect(const EditorBuffer &buffer,
         };
         SDL_FillRect(global_screen, &selection_rect, 0x992211);
     }
+#endif
 }
 
 static void DrawWindowOnRect(const EditorWindow &window,
@@ -266,8 +279,8 @@ static void DrawWindowOnRect(const EditorWindow &window,
             if (i < window.number_of_windows - 1)
             {
                 Rect splitting_rect = (window.split == WindowSplit::WIN_SPLIT_HORIZONTAL
-                     ? Rect { split_idx[i]-previous_split, rect.y, 1, rect.height }
-                     : Rect { rect.x, split_idx[i]-previous_split, rect.width, 1 });
+                     ? Rect { split_idx[i], rect.y, 1, rect.height }
+                     : Rect { rect.x, split_idx[i], rect.width, 1 });
 
                 DrawSplittingLine(splitting_rect);
             }
@@ -283,11 +296,14 @@ static void DrawWindowOnRect(const EditorWindow &window,
 // TODO: Check if any of these functions can fail and handle this.
 static int ResizeAndRedrawWindow()
 {
-    // TODO: Update the screen surface and its size. When this changes, whole
-    // screen needs to be redrawn, otherwise just some part of it, so this
-    // funcion will probobly need to be splited into smaller parts!
-    SDL_UpdateWindowSurface(global_window);
     global_screen = SDL_GetWindowSurface(global_window);
+    if (!global_screen)
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                     "\e[91;1mCouldnt get the right surface of the window!\e[0m");
+        assert(false);
+    }
+
     SDL_GetWindowSize(global_window, &global_window_w, &global_window_h);
 
     // TODO(BUG): Splitting window to hard makes above function reporting that
@@ -298,39 +314,6 @@ static int ResizeAndRedrawWindow()
     // Fill the whole screen, just in case.
     const SDL_Rect whole_screen = { 0, 0, global_window_w, global_window_h };
     SDL_FillRect(global_screen, &whole_screen, 0xff00ff); // Color suggesting error.
-
-#if 0
-    int line_split_px = static_cast<int>(global_screen_split_percentage * global_window_w);
-
-    // TODO: This needs more abstraction when there are more splits, recusive
-    // splits etc, etc...
-    SDL_Rect buffers[2];
-    buffers[0] = { 0, 0, line_split_px, global_window_h };
-    buffers[1] = { line_split_px, 0, global_window_w - line_split_px, global_window_h };
-
-    for (int i = 0; i < 2; ++i)
-    {
-        int color = (i == 0 ? 0x991111 : 0x119911);
-        SDL_FillRect(global_screen, buffers+i, color);
-    }
-
-    const SDL_Rect splitting_line = { line_split_px, 0, 1, global_window_h };
-    SDL_FillRect(global_screen, &splitting_line, 0xFFFFFF);
-
-    SDL_Rect rects[number_of_surfaces];
-    for (int i = 0; i < number_of_surfaces; ++i)
-    {
-        rects[i] = {
-            horizontal_padding,
-            first_item_height + i * (font_size + vertical_padding),
-            text_surface[i]->w,
-            text_surface[i]->h
-        };
-    }
-
-    for (int i = 0; i < number_of_surfaces; ++i)
-        SDL_BlitSurface(text_surface[i], nullptr, global_screen, rects + i);
-#endif
 
     assert(global_number_of_windows > 0);
     const EditorWindow main_window = global_windows_arr[1];
@@ -346,6 +329,8 @@ static int ResizeAndRedrawWindow()
     DrawWindowOnRect(main_window,
                      Rect { 0, 0, global_window_w, global_window_h - 17 },
                      global_current_window_idx == 1);
+
+    SDL_UpdateWindowSurface(global_window);
 
     return 0;
 }
@@ -434,13 +419,29 @@ static int HandleEvent(const SDL_Event &event)
             }
             else if (event.key.keysym.sym == 104)
             {
-                global_windows_arr[global_current_window_idx].
-                    SplitWindow(WindowSplit::WIN_SPLIT_HORIZONTAL);
+                if (global_current_window_idx != 0)
+                {
+                    global_windows_arr[global_current_window_idx].
+                        SplitWindow(WindowSplit::WIN_SPLIT_HORIZONTAL);
+                }
+                else
+                {
+                    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                                 "\e[93;1mCannot split minibuffer!\e[0m");
+                }
             }
             else if (event.key.keysym.sym == 118)
             {
-                global_windows_arr[global_current_window_idx].
-                    SplitWindow(WindowSplit::WIN_SPLIT_VERTCAL);
+                if (global_current_window_idx != 0)
+                {
+                    global_windows_arr[global_current_window_idx].
+                        SplitWindow(WindowSplit::WIN_SPLIT_VERTCAL);
+                }
+                else
+                {
+                    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                                 "\e[93;1mCannot split minibuffer!\e[0m");
+                }
             }
 
             if (global_windows_arr[global_current_window_idx].contains_buffer)
@@ -592,6 +593,7 @@ static int InitWindow(const int width, const int height)
                                      SDL_WINDOWPOS_UNDEFINED,
                                      SDL_WINDOWPOS_UNDEFINED,
                                      width, height, 0);
+                                     // 0, 0, 0);
 
     if (!global_window)
     {
