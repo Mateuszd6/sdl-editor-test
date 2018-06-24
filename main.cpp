@@ -143,13 +143,14 @@ void EditorWindow::SplitWindow(WindowSplit split_type)
     }
 }
 
+// TODO: Would be nice to add them using regular, add-window/buffer API.
 static void InitializeFirstWindow()
 {
     global_number_of_buffers = 2;
     global_buffers[0] = { .color = 0xffffff }; // Buffer with index 0 is a minibufer.
     global_buffers[1] = { .color = WINDOW_COLOR };
 
-    global_number_of_windows = 4;
+    global_number_of_windows = 2;
 
     // Window with index 0 contains minibuffer. And is drawn separetely.
     global_windows_arr[0] = EditorWindow {
@@ -348,7 +349,7 @@ static EditorWindow *GetNextActiveWindow(const EditorWindow *current_window)
     }
     else
     {
-        return parent->split_windows[index_in_parent + 1];
+        return GetFirstWindowInSubtree(parent->split_windows[index_in_parent + 1]);
     }
 }
 
@@ -364,29 +365,10 @@ static void SwitchToNextWidnow()
     // TODO: Do we assume there is at least one buffer at a time?
     assert(global_number_of_buffers);
 
-#if 0
-    int next_window_idx = global_current_window_idx;
-    do
-    {
-        next_window_idx++;
-        if (next_window_idx >= global_number_of_windows)
-            next_window_idx = 1;
-    } while (!global_windows_arr[next_window_idx].contains_buffer
-             && next_window_idx != global_current_window_idx);
-
-
-    if (global_current_window_idx == next_window_idx)
-    {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
-                     "\e[93;1mWindow unchanged, because there is no other window!\e[0m");
-    }
-    global_current_window_idx = next_window_idx;
-#else
     EditorWindow *next_window  =
         GetNextActiveWindow(global_windows_arr + global_current_window_idx);
 
     global_current_window_idx = next_window - global_windows_arr;
-#endif
 }
 
 static void SwitchToMiniBuffer()
