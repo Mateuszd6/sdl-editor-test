@@ -32,13 +32,10 @@ static int global_window_w, global_window_h;
 static const int number_of_surfaces = 4;
 static SDL_Surface *text_surface[number_of_surfaces];
 
-// TODO: Differenciate vertical paddign from the top and from the bottom?
 static int global_font_size = 15;
 
-// Index of window that displays currently selected buffer.
-static int global_current_window_idx;
-
 #if 0
+// TODO: Differenciate vertical paddign from the top and from the bottom?
 static int vertical_padding = 5;
 static int horizontal_padding = 15;
 static int first_item_height = 5;
@@ -100,6 +97,9 @@ static int global_number_of_windows = 0;
 static EditorWindow global_windows_arr[256];
 static int global_number_of_buffers = 0;
 static EditorBuffer global_buffers[256];
+
+// Index of window that displays currently selected buffer.
+static int global_current_window_idx;
 
 static EditorBuffer *CreateNewBuffer()
 {
@@ -307,27 +307,41 @@ static int ResizeAndRedrawWindow()
 
 static int global_window_idx_before_entering_minibuffer;
 
-// Set active first window to given root window.
-static EditorWindow *GetFirstWindowInSubtree(EditorWindow *root_window)
+enum WindowTraverseMode { WIN_TRAVERSE_FORWARD, WIN_TRAVERSE_BACKWARDS };
+
+// If traverse is forward, we pick the first window in the subtree of the
+// root_window, otherwise we pick the last one (we always go either left or
+// right recusively).
+static EditorWindow *GetFirstOrLastWindowInSubtree(EditorWindow *const root_window,
+                                                   const WindowTraverseMode traverse)
 {
     // If root window is a bufer, it is just selected.
     if (root_window->contains_buffer)
         return root_window;
 
     EditorWindow *next_window = root_window;
+    int window_to_pick_idx;
+
+    if (traverse == WindowTraverseMode::WIN_TRAVERSE_FORWARD)
+        window_to_pick_idx = 0;
+    else
+    {
+        assert (traverse == WindowTraverseMode::WIN_TRAVERSE_BACKWARDS);
+        window_to_pick_idx = next_window->number_of_windows - 1;
+    }
+
     while (!next_window->contains_buffer)
-        next_window = next_window->split_windows[0];
+        next_window = next_window->split_windows[window_to_pick_idx];
 
     return next_window;
 }
 
-static EditorWindow *GetNextActiveWindow(const EditorWindow *current_window)
+static EditorWindow *GetNextOrPrevActiveWindow(const EditorWindow *current_window,
+                                               const WindowTraverseMode traverse)
 {
     EditorWindow *parent = current_window->parent_ptr;
     if (!parent)
-    {
-        return GetFirstWindowInSubtree(global_windows_arr + 1);
-    }
+        return GetFirstOrLastWindowInSubtree(global_windows_arr + 1, traverse);
 
     // Parent must be splited window.
     assert(!parent->contains_buffer);
@@ -339,21 +353,50 @@ static EditorWindow *GetNextActiveWindow(const EditorWindow *current_window)
             index_in_parent = i;
             break;
         }
-
     assert(index_in_parent >= 0);
-    if (index_in_parent + 1 >= parent->number_of_windows)
+
+    // TODO: Compress this better!
+    if (traverse == WindowTraverseMode::WIN_TRAVERSE_FORWARD)
     {
-        // Last window in this split - we must go to the upper window and search
-        // the next one recusively.
-        return GetFirstWindowInSubtree(GetNextActiveWindow(parent));
+        if (index_in_parent + 1 >= parent->number_of_windows)
+        {
+            // Last window in this split - we must go to the upper window and search
+            // the next one recusively.
+            return GetFirstOrLastWindowInSubtree(
+                GetNextOrPrevActiveWindow(parent, traverse),
+                traverse);
+        }
+        else
+        {
+            return GetFirstOrLastWindowInSubtree(
+                parent->split_windows[index_in_parent + 1],
+                traverse);
+        }
     }
+
     else
     {
-        return GetFirstWindowInSubtree(parent->split_windows[index_in_parent + 1]);
+        assert(traverse == WindowTraverseMode::WIN_TRAVERSE_BACKWARDS);
+        if (index_in_parent == 0)
+        {
+            // First window in this split - we must go to the parent window and
+            // search the previous one recusively.
+            return GetFirstOrLastWindowInSubtree(
+                GetNextOrPrevActiveWindow(parent, traverse),
+                traverse);
+        }
+        else
+        {
+            return GetFirstOrLastWindowInSubtree(
+                parent->split_windows[index_in_parent - 1],
+                traverse);
+        }
     }
 }
 
-static void SwitchToNextWidnow()
+// If go_forward is true we switch to the next widnow, otherwise we switch to
+// the previous one.
+static void SwitchWindow(const WindowTraverseMode traverse)
 {
     if (global_current_window_idx == 0)
     {
@@ -363,11 +406,15 @@ static void SwitchToNextWidnow()
     }
 
     // TODO: Do we assume there is at least one buffer at a time?
+    // TODO: What if there is just minibuffer?
     assert(global_number_of_buffers);
+    EditorWindow *next_window = nullptr;
 
-    EditorWindow *next_window  =
-        GetNextActiveWindow(global_windows_arr + global_current_window_idx);
+    next_window = GetNextOrPrevActiveWindow(
+        global_windows_arr + global_current_window_idx,
+        traverse);
 
+    assert(next_window);
     global_current_window_idx = next_window - global_windows_arr;
 }
 
@@ -413,19 +460,29 @@ static int HandleEvent(const SDL_Event &event)
         case SDL_KEYDOWN:
         {
 #if 1
-            // W - switch window.
+            // W - Switch window.
             if (event.key.keysym.sym == 119)
             {
-                SwitchToNextWidnow();
+                SwitchWindow(WindowTraverseMode::WIN_TRAVERSE_FORWARD);
             }
+            // Q - Switch window backwards.
+            else if (event.key.keysym.sym == 113)
+            {
+                SwitchWindow(WindowTraverseMode::WIN_TRAVERSE_BACKWARDS);
+            }
+
+            // X - Focus the minibuffer.
             else if (event.key.keysym.sym == 120)
             {
                 SwitchToMiniBuffer();
             }
+            // G - Quit minibuffer.
             else if (event.key.keysym.sym == 103)
             {
                 SwitchOutFromMiniBuffer();
             }
+
+            // H - Split horizontally.
             else if (event.key.keysym.sym == 104)
             {
                 if (global_current_window_idx != 0)
@@ -439,6 +496,7 @@ static int HandleEvent(const SDL_Event &event)
                                  "\e[93;1mCannot split minibuffer!\e[0m");
                 }
             }
+            // V - Split vertically.
             else if (event.key.keysym.sym == 118)
             {
                 if (global_current_window_idx != 0)
