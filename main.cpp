@@ -71,6 +71,9 @@ struct EditorWindow
     // only one window in the screen (expect minibuffer)).
     EditorWindow *parent_ptr;
 
+    // This must be updated after every window resize.
+    Rect position;
+
     union
     {
         struct // If contains single buffer:
@@ -89,6 +92,9 @@ struct EditorWindow
     };
 
     void SplitWindow(WindowSplit split_type);
+    void UpdateSize(Rect new_rect);
+
+    void Redraw(const bool current_select) const;
 };
 
 // Window at index 0 is main window, created on init and it cannot be removed.
@@ -143,6 +149,96 @@ void EditorWindow::SplitWindow(WindowSplit split_type)
     }
 }
 
+void EditorWindow::UpdateSize(Rect new_rect)
+{
+    position = new_rect;
+
+    // If windows contains multiple windows, we must update their size first.
+    if (!contains_buffer)
+    {
+        // Tells at which pixel one of the windows in the split ends.
+        // In range of (min_pos - max_pos);
+        int split_idx[MAX_WINDOWS_ON_SPLIT];
+
+        assert(number_of_windows >= 2);
+
+        for (int i = 0; i < number_of_windows-1; ++i)
+            assert(splits_percentages[i] > 0 &&
+                   splits_percentages[i] < 1 &&
+                   (i < number_of_windows-2
+                    ? splits_percentages[i] < splits_percentages[i+1]
+                    : 1));
+
+        int min_pos = (split == WindowSplit::WIN_SPLIT_HORIZONTAL
+                       ? position.x : position.y);
+        int max_pos = (split == WindowSplit::WIN_SPLIT_HORIZONTAL
+                       ? position.x + position.width : position.y + position.height);
+        int difference = max_pos - min_pos;
+        assert(difference > 0);
+
+        for (int i = 0; i < number_of_windows-1; ++i)
+        {
+            split_idx[i] =
+                min_pos + static_cast<int>(splits_percentages[i] * difference);
+
+            // TODO: Mayby just handle the spltting lines as part of the buffer?
+            // There is a one pixel space for splitting line.
+            if (i > 0)
+                split_idx[i] += 1;
+
+            assert(min_pos < split_idx[i] && split_idx[i] < max_pos);
+        }
+        split_idx[number_of_windows-1] = max_pos;
+
+        int previous_split = min_pos;
+        for (int i = 0; i < number_of_windows; ++i)
+        {
+            Rect nested_window_rect =
+                (split == WindowSplit::WIN_SPLIT_HORIZONTAL
+                 ? Rect { previous_split, position.y,
+                          split_idx[i]-previous_split, position.height }
+                 : Rect { position.x, previous_split,
+                          position.width, split_idx[i]-previous_split });
+
+#if 0
+            // TODO: Move outside the loop for better performace?
+            if (i < number_of_windows - 1)
+            {
+                Rect splitting_rect = (split == WindowSplit::WIN_SPLIT_HORIZONTAL
+                                       ? Rect { split_idx[i], rect.y, 1, rect.height }
+                                       : Rect { rect.x, split_idx[i], rect.width, 1 });
+
+                DrawSplittingLine(splitting_rect);
+            }
+#endif // 0
+
+            // Add 1 becasue this is a space for the line separator.
+            previous_split = split_idx[i]+1;
+            split_windows[i]->UpdateSize(nested_window_rect);
+        }
+    }
+}
+
+void EditorWindow::Redraw(const bool current_select) const
+{
+    if (contains_buffer)
+    {
+        const SDL_Rect sdl_rect = {
+            position.x, position.y,
+            position.width, position.height
+        };
+
+        SDL_FillRect(global_screen,
+                     &sdl_rect,
+                     current_select ? 0xddee22 : buffer_ptr->color);
+    }
+    else
+        for (int i = 0; i < number_of_windows; ++i)
+        {
+            split_windows[i]->Redraw(false);
+        }
+}
+
 // TODO: Would be nice to add them using regular, add-window/buffer API.
 static void InitializeFirstWindow()
 {
@@ -157,13 +253,15 @@ static void InitializeFirstWindow()
         .contains_buffer = 1,
         .buffer_ptr = global_buffers,
         .parent_ptr = nullptr,
+        .position = Rect { 0, global_window_h - 17 +1, global_window_w, 17 }
     };
 
     // Window with index 1 is main window.
     global_windows_arr[1] = EditorWindow {
         .contains_buffer = 1,
         .buffer_ptr = global_buffers + 1,
-        .parent_ptr = nullptr
+        .parent_ptr = nullptr,
+        .position = Rect { 0, 0, global_window_w, global_window_h - 17 }
     };
 
     global_current_window_idx = 1;
@@ -173,94 +271,6 @@ static void DrawSplittingLine(const Rect &rect)
 {
     SDL_Rect split_line = SDL_Rect { rect.x, rect.y, rect.width, rect.height };
     SDL_FillRect(global_screen, &split_line, 0x64645e);
-}
-
-static void DrawBufferOnRect(const EditorBuffer &buffer,
-                             const Rect &rect,
-                             const bool current_select)
-{
-    const SDL_Rect sdl_rect = { rect.x, rect.y, rect.width, rect.height };
-    SDL_FillRect(global_screen, &sdl_rect, current_select ? 0xddee22 : buffer.color);
-
-#if 0
-    if (current_select)
-    {
-        const SDL_Rect selection_rect = {
-            rect.x + 5, rect.y + 5,
-            rect.width - 10, rect.height - 10
-        };
-        SDL_FillRect(global_screen, &selection_rect, 0x992211);
-    }
-#endif
-}
-
-static void DrawWindowOnRect(const EditorWindow &window,
-                             const Rect &rect,
-                             const bool is_selected)
-{
-    if (window.contains_buffer)
-    {
-        DrawBufferOnRect(* window.buffer_ptr, rect, is_selected);
-    }
-    else
-    {
-        // Tells at which pixel one of the windows in the split ends.
-        // In range of (min_pos - max_pos);
-        int split_idx[MAX_WINDOWS_ON_SPLIT];
-
-        assert(window.number_of_windows >= 2);
-
-        for (int i = 0; i < window.number_of_windows-1; ++i)
-            assert(window.splits_percentages[i] > 0 &&
-                   window.splits_percentages[i] < 1 &&
-                   (i < window.number_of_windows-2
-                    ? window.splits_percentages[i] < window.splits_percentages[i+1]
-                    : 1));
-
-        int min_pos = (window.split == WindowSplit::WIN_SPLIT_HORIZONTAL
-                       ? rect.x : rect.y);
-        int max_pos = (window.split == WindowSplit::WIN_SPLIT_HORIZONTAL
-                       ? rect.x + rect.width : rect.y + rect.height);
-        int difference = max_pos - min_pos;
-        assert(difference > 0);
-
-        for (int i = 0; i < window.number_of_windows-1; ++i)
-        {
-            split_idx[i] =
-                min_pos + static_cast<int>(window.splits_percentages[i] * difference);
-            // There is a one pixel space for splitting line.
-            if (i > 0)
-                split_idx[i] += 1;
-
-            assert(min_pos < split_idx[i] && split_idx[i] < max_pos);
-        }
-        split_idx[window.number_of_windows-1] = max_pos;
-
-        int previous_split = min_pos;
-        for (int i = 0; i < window.number_of_windows; ++i)
-        {
-            Rect rect_to_draw_recusive_window =
-                (window.split == WindowSplit::WIN_SPLIT_HORIZONTAL
-                 ? Rect { previous_split, rect.y, split_idx[i]-previous_split, rect.height }
-                 : Rect { rect.x, previous_split, rect.width, split_idx[i]-previous_split });
-
-            // TODO: Move outside the loop for better performace?
-            if (i < window.number_of_windows - 1)
-            {
-                Rect splitting_rect = (window.split == WindowSplit::WIN_SPLIT_HORIZONTAL
-                     ? Rect { split_idx[i], rect.y, 1, rect.height }
-                     : Rect { rect.x, split_idx[i], rect.width, 1 });
-
-                DrawSplittingLine(splitting_rect);
-            }
-
-            // Add 1 becasue this is a space for the line separator.
-            previous_split = split_idx[i]+1;
-            DrawWindowOnRect(* window.split_windows[i],
-                             rect_to_draw_recusive_window,
-                             global_windows_arr + global_current_window_idx == window.split_windows[i]);
-        }
-    }
 }
 
 // TODO: Check if any of these functions can fail and handle this.
@@ -291,6 +301,7 @@ static int ResizeAndRedrawWindow()
 
     DrawSplittingLine({ 0, global_window_h - 17, global_window_w, 1 });
 
+#if 0
     // Minibufer takes the fixed size of the window, so we draw it first, here:
     DrawWindowOnRect(mini_buffer_window,
                      Rect { 0, global_window_h - 17 +1, global_window_w, 17 },
@@ -299,7 +310,10 @@ static int ResizeAndRedrawWindow()
     DrawWindowOnRect(main_window,
                      Rect { 0, 0, global_window_w, global_window_h - 17 },
                      global_current_window_idx == 1);
-
+#else // 0
+    mini_buffer_window.Redraw(false);
+    main_window.Redraw(false);
+#endif // 0
     SDL_UpdateWindowSurface(global_window);
 
     return 0;
@@ -559,6 +573,13 @@ static int HandleEvent(const SDL_Event &event)
                 case SDL_WINDOWEVENT_SIZE_CHANGED:
                 {
                     SDL_Log("Window %d resized", event.window.windowID);
+
+                    global_windows_arr[0].UpdateSize(Rect {
+                            0, global_window_h - 17 +1,
+                            global_window_w, 17 });
+                    global_windows_arr[1].UpdateSize(Rect {
+                            0, 0,
+                            global_window_w, global_window_h - 17 });
                 } break;
 
                 case SDL_WINDOWEVENT_MINIMIZED:
