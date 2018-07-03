@@ -141,6 +141,8 @@ void EditorWindow::SplitWindow(WindowSplit split_type)
         number_of_windows = 2;
 
         global_current_window_idx = split_windows[0] - global_windows_arr;
+
+        UpdateSize(position);
     }
     else
     {
@@ -181,7 +183,7 @@ void EditorWindow::UpdateSize(Rect new_rect)
             split_idx[i] =
                 min_pos + static_cast<int>(splits_percentages[i] * difference);
 
-            // TODO: Mayby just handle the spltting lines as part of the buffer?
+            // TODO(Splitting lines): Mayby just handle them as part of the buffer?
             // There is a one pixel space for splitting line.
             if (i > 0)
                 split_idx[i] += 1;
@@ -267,14 +269,32 @@ static void InitializeFirstWindow()
     global_current_window_idx = 1;
 }
 
+// TODO(Splitting lines): Remove unused atrribute!
+__attribute__ ((unused))
 static void DrawSplittingLine(const Rect &rect)
 {
     SDL_Rect split_line = SDL_Rect { rect.x, rect.y, rect.width, rect.height };
     SDL_FillRect(global_screen, &split_line, 0x64645e);
 }
 
+// TODO: Create namespace application and move resize and redraw window
+// functions and all globals there!
+// TODO: Check if something here can fail, if not change the type to void.
+static int ResizeWindow()
+{
+    global_windows_arr[0].UpdateSize(Rect {
+            0, global_window_h - 17 +1,
+            global_window_w, 17 });
+    global_windows_arr[1].UpdateSize(Rect {
+            0, 0,
+            global_window_w, global_window_h - 17 });
+
+    return 0;
+}
+
 // TODO: Check if any of these functions can fail and handle this.
-static int ResizeAndRedrawWindow()
+// TODO: Check if something here can fail, if not change the type to void.
+static int RedrawWindow()
 {
     global_screen = SDL_GetWindowSurface(global_window);
     if (!global_screen)
@@ -286,8 +306,6 @@ static int ResizeAndRedrawWindow()
 
     SDL_GetWindowSize(global_window, &global_window_w, &global_window_h);
 
-    // TODO(BUG): Splitting window to hard makes above function reporting that
-    // the window size is 0.
     if (global_window_w == 0 || global_window_h == 0)
         assert(!"Size is 0");
 
@@ -299,7 +317,10 @@ static int ResizeAndRedrawWindow()
     const EditorWindow main_window = global_windows_arr[1];
     const EditorWindow mini_buffer_window = global_windows_arr[0];
 
+    // TODO(Splitting lines): Decide how i want to draw them.
+#if 0
     DrawSplittingLine({ 0, global_window_h - 17, global_window_w, 1 });
+#endif
 
 #if 0
     // Minibufer takes the fixed size of the window, so we draw it first, here:
@@ -573,13 +594,7 @@ static int HandleEvent(const SDL_Event &event)
                 case SDL_WINDOWEVENT_SIZE_CHANGED:
                 {
                     SDL_Log("Window %d resized", event.window.windowID);
-
-                    global_windows_arr[0].UpdateSize(Rect {
-                            0, global_window_h - 17 +1,
-                            global_window_w, 17 });
-                    global_windows_arr[1].UpdateSize(Rect {
-                            0, 0,
-                            global_window_w, global_window_h - 17 });
+                    ResizeWindow();
                 } break;
 
                 case SDL_WINDOWEVENT_MINIMIZED:
@@ -800,7 +815,8 @@ int main(void)
         }
 
         // Move it to some event occurences or make a dirty-bit system.
-        ResizeAndRedrawWindow();
+        // TODO: Redraw window only if something got dirty.
+        RedrawWindow();
     }
 
     TTF_Quit();
