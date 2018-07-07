@@ -5,8 +5,7 @@
 #include <SDL.h>
 #include <SDL_ttf.h>
 
-#define RANDOM_WINDOW_COLORS
-
+// #define RANDOM_WINDOW_COLORS
 #ifdef RANDOM_WINDOW_COLORS
 // TODO(Temporary):
 #include <time.h>
@@ -160,15 +159,39 @@ void EditorWindow::SplitWindow(WindowSplit split_type)
         }
         else
         {
+            // TODO: Make sure that this assertion won't fire.
             assert(parent_ptr->number_of_windows < MAX_WINDOWS_ON_SPLIT - 1);
 
-            // TODO(Next):
-            //      -> Get index in parent window,
-            //      -> Move windows with bigger index by one in the array.
+            int index_in_parent = -1;
+            for (int i = 0; i < parent_ptr->number_of_windows; ++i)
+                if (parent_ptr->split_windows[i] == this)
+                {
+                    index_in_parent = i;
+                    break;
+                }
+            assert(index_in_parent >= 0);
 
-            //      -> Calculate the split which is half between split percent
-            //         under index of THIS buffer, and the next one nad insert
-            //         new window with buffer 'new_buffer' there.
+            // Move windows with bigger index by one in the array.
+            for (int i = parent_ptr->number_of_windows; i >= index_in_parent + 1; --i)
+            {
+                parent_ptr->split_windows[i] = parent_ptr->split_windows[i - 1];
+                parent_ptr->splits_percentages[i] = parent_ptr->splits_percentages[i - 1];
+            }
+            parent_ptr->split_windows[index_in_parent + 1] =
+                CreateNewWindowWithBuffer(new_buffer, parent_ptr);
+
+            // Calculate the split which is half between split percent under
+            // index of THIS buffer, and the next one nad insert new window with
+            // buffer 'new_buffer' there.
+            float previous_split = (index_in_parent == 0
+                                    ? 0
+                                    : parent_ptr->splits_percentages[index_in_parent - 1]);
+
+            float split_perct = (parent_ptr->splits_percentages[index_in_parent] + previous_split) / 2;
+            parent_ptr->splits_percentages[index_in_parent] = split_perct;
+
+            // We can safetly increment this, becasue of the check above.
+            parent_ptr->number_of_windows++;
         }
     }
     else
@@ -350,8 +373,8 @@ static int RedrawWindow()
 
     mini_buffer_window.Redraw(globals::current_window_idx == 0);
     main_window.Redraw(globals::current_window_idx == 1);
-
     SDL_UpdateWindowSurface(globals::window);
+
     return 0;
 }
 
