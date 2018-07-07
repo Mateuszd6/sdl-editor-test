@@ -5,41 +5,19 @@
 #include <SDL.h>
 #include <SDL_ttf.h>
 
-// #define RANDOM_WINDOW_COLORS
+#define RANDOM_WINDOW_COLORS
 
 #ifdef RANDOM_WINDOW_COLORS
-// TODO: Temporary.
+// TODO(Temporary):
 #include <time.h>
 #define WINDOW_COLOR (rand())
 #else
 #define WINDOW_COLOR (0xffffff)
 #endif
 
-// TODO: Move to other config file!
+// TODO(Cleanup): Move to other config file!
 #define SUCCEEDED(expr_res) (static_cast<int>(expr_res) >= 0)
 #define FAILED(expr_res) (static_cast<int>(expr_res) < 0)
-
-// TODO: Refactor globals!
-static SDL_Window *global_window;
-
-// This is a surface that we put stuff on, and after that bit it to the screen.
-// This uses SDL software rendering and there is no use of SLD_Renderer and
-// stuff. After a resizing this pointer is changed. Do not free it!
-static SDL_Surface *global_screen;
-
-static int global_window_w, global_window_h;
-
-static const int number_of_surfaces = 4;
-static SDL_Surface *text_surface[number_of_surfaces];
-
-static int global_font_size = 15;
-
-#if 0
-// TODO: Differenciate vertical paddign from the top and from the bottom?
-static int vertical_padding = 5;
-static int horizontal_padding = 15;
-static int first_item_height = 5;
-#endif
 
 enum WindowSplit { WIN_SPLIT_VERTCAL, WIN_SPLIT_HORIZONTAL };
 
@@ -56,11 +34,13 @@ struct EditorBuffer
     int color;
 };
 
-// TODO: Is this too small limitation?
 #define MAX_WINDOWS_ON_SPLIT (4)
 
 struct EditorWindow
 {
+    // Heavily assumes, that there is only one window currently selected.
+    int is_selected;
+
     // If 0, window is splited to multiple windows, either vertically or
     // horizontally. Otherwise pointer to buffer, that is displayed in window is
     // stored.
@@ -93,36 +73,64 @@ struct EditorWindow
 
     void SplitWindow(WindowSplit split_type);
     void UpdateSize(Rect new_rect);
-
-    void Redraw(const bool current_select) const;
+    void Redraw(bool current_select) const;
 };
 
-// Window at index 0 is main window, created on init and it cannot be removed.
-// TODO: Make these auto-resizable and think about initial size.
-static int global_number_of_windows = 0;
-static EditorWindow global_windows_arr[256];
-static int global_number_of_buffers = 0;
-static EditorBuffer global_buffers[256];
+// TODO(Cleanup): Try to use as less globals as possible...
+namespace globals
+{
+    // TODO(Platform): Make this platform-dependent.
+    static SDL_Window *window;
 
-// Index of window that displays currently selected buffer.
-static int global_current_window_idx;
+    // This is a surface that we put stuff on, and after that bit it to the
+    // screen. This uses SDL software rendering and there is no use of
+    // SLD_Renderer and stuff. After a resizing this pointer is changed.
+    // Do not free it!
+    // TODO(Platform): Make this platform-dependent.
+    static SDL_Surface *screen;
+
+    static int window_w, window_h;
+
+    static const int number_of_surfaces = 4;
+    static SDL_Surface *text_surface[number_of_surfaces];
+
+    static int font_size = 15;
+
+    // Window at index 0 is main window, created on init and it cannot be
+    // removed. TODO(Testing): Make these auto-resizable and think about initial size.
+    static int number_of_windows = 0;
+    static EditorWindow windows_arr[256];
+    static int number_of_buffers = 0;
+    static EditorBuffer buffers[256];
+
+    // Index of window that displays currently selected buffer.
+    static int current_window_idx;
+
+    // Index of active window before entering minibuffer.
+    // TODO(Cleaup): Default value.
+    static int window_idx_before_entering_minibuffer;
+}
+
+enum WindowTraverseMode { WIN_TRAVERSE_FORWARD, WIN_TRAVERSE_BACKWARDS };
 
 static EditorBuffer *CreateNewBuffer()
 {
-    global_buffers[global_number_of_buffers++] = { .color = WINDOW_COLOR };
-    return global_buffers + global_number_of_buffers - 1;
+    globals::buffers[globals::number_of_buffers++] = { .color = WINDOW_COLOR };
+    return globals::buffers + globals::number_of_buffers - 1;
 }
 
 static EditorWindow *CreateNewWindowWithBuffer(EditorBuffer *buffer,
                                                EditorWindow *root_window)
 {
-    global_windows_arr[global_number_of_windows++] = EditorWindow {
-        .contains_buffer = 1,
-        .buffer_ptr = buffer,
-        .parent_ptr = root_window
-    };
+    globals::windows_arr[globals::number_of_windows++] =
+        EditorWindow
+        {
+            .contains_buffer = 1,
+            .buffer_ptr = buffer,
+            .parent_ptr = root_window
+        };
 
-    return global_windows_arr + global_number_of_windows - 1;
+    return globals::windows_arr + globals::number_of_windows - 1;
 }
 
 // NOTE: This window must contain buffer!
@@ -132,21 +140,40 @@ void EditorWindow::SplitWindow(WindowSplit split_type)
 {
     if (contains_buffer)
     {
+        EditorBuffer *new_buffer = CreateNewBuffer();
         EditorBuffer *previous_buffer_ptr = buffer_ptr;
-        contains_buffer = 0;
-        split = split_type;
-        splits_percentages[0] = 0.5f;
-        split_windows[0] = CreateNewWindowWithBuffer(previous_buffer_ptr, this);
-        split_windows[1] = CreateNewWindowWithBuffer(CreateNewBuffer(), this);
-        number_of_windows = 2;
 
-        global_current_window_idx = split_windows[0] - global_windows_arr;
+        // parent_ptr cannot contain buffer!
+        assert(!parent_ptr || !parent_ptr->contains_buffer);
 
-        UpdateSize(position);
+        if (!parent_ptr || parent_ptr->split != split_type)
+        {
+            // We must create new window, which holds these two:
+            split = split_type;
+            splits_percentages[0] = 0.5f;
+            split_windows[0] = CreateNewWindowWithBuffer(previous_buffer_ptr, this);
+            split_windows[1] = CreateNewWindowWithBuffer(new_buffer, this);
+            number_of_windows = 2;
+            globals::current_window_idx = split_windows[0] - globals::windows_arr;
+            contains_buffer = 0;
+            UpdateSize(position);
+        }
+        else
+        {
+            assert(parent_ptr->number_of_windows < MAX_WINDOWS_ON_SPLIT - 1);
+
+            // TODO(Next):
+            //      -> Get index in parent window,
+            //      -> Move windows with bigger index by one in the array.
+
+            //      -> Calculate the split which is half between split percent
+            //         under index of THIS buffer, and the next one nad insert
+            //         new window with buffer 'new_buffer' there.
+        }
     }
     else
     {
-        // TODO: Info, that something has gone horribly wrong...
+        // TODO(Debug): Info, that something has gone horribly wrong...
         assert(false);
     }
 }
@@ -203,7 +230,7 @@ void EditorWindow::UpdateSize(Rect new_rect)
                           position.width, split_idx[i]-previous_split });
 
 #if 0
-            // TODO: Move outside the loop for better performace?
+            // TODO(Profiling): Move outside the loop for better performace?
             if (i < number_of_windows - 1)
             {
                 Rect splitting_rect = (split == WindowSplit::WIN_SPLIT_HORIZONTAL
@@ -221,7 +248,7 @@ void EditorWindow::UpdateSize(Rect new_rect)
     }
 }
 
-void EditorWindow::Redraw(const bool current_select) const
+void EditorWindow::Redraw(bool current_select) const
 {
     if (contains_buffer)
     {
@@ -230,43 +257,43 @@ void EditorWindow::Redraw(const bool current_select) const
             position.width, position.height
         };
 
-        SDL_FillRect(global_screen,
-                     &sdl_rect,
+        SDL_FillRect(globals::screen, &sdl_rect,
                      current_select ? 0xddee22 : buffer_ptr->color);
     }
     else
         for (int i = 0; i < number_of_windows; ++i)
         {
-            split_windows[i]->Redraw(false);
+            split_windows[i]->Redraw(globals::current_window_idx ==
+                                     (split_windows[i] - globals::windows_arr));
         }
 }
 
-// TODO: Would be nice to add them using regular, add-window/buffer API.
+// TODO(Cleanup): Would be nice to add them using regular, add-window/buffer API.
 static void InitializeFirstWindow()
 {
-    global_number_of_buffers = 2;
-    global_buffers[0] = { .color = 0xffffff }; // Buffer with index 0 is a minibufer.
-    global_buffers[1] = { .color = WINDOW_COLOR };
+    globals::number_of_buffers = 2;
+    globals::buffers[0] = { .color = 0xffffff }; // Buffer with index 0 is a minibufer.
+    globals::buffers[1] = { .color = WINDOW_COLOR };
 
-    global_number_of_windows = 2;
+    globals::number_of_windows = 2;
 
     // Window with index 0 contains minibuffer. And is drawn separetely.
-    global_windows_arr[0] = EditorWindow {
+    globals::windows_arr[0] = EditorWindow {
         .contains_buffer = 1,
-        .buffer_ptr = global_buffers,
+        .buffer_ptr = globals::buffers,
         .parent_ptr = nullptr,
-        .position = Rect { 0, global_window_h - 17 +1, global_window_w, 17 }
+        .position = Rect { 0, globals::window_h - 17 +1, globals::window_w, 17 }
     };
 
     // Window with index 1 is main window.
-    global_windows_arr[1] = EditorWindow {
+    globals::windows_arr[1] = EditorWindow {
         .contains_buffer = 1,
-        .buffer_ptr = global_buffers + 1,
+        .buffer_ptr = globals::buffers + 1,
         .parent_ptr = nullptr,
-        .position = Rect { 0, 0, global_window_w, global_window_h - 17 }
+        .position = Rect { 0, 0, globals::window_w, globals::window_h - 17 }
     };
 
-    global_current_window_idx = 1;
+    globals::current_window_idx = 1;
 }
 
 // TODO(Splitting lines): Remove unused atrribute!
@@ -274,75 +301,58 @@ __attribute__ ((unused))
 static void DrawSplittingLine(const Rect &rect)
 {
     SDL_Rect split_line = SDL_Rect { rect.x, rect.y, rect.width, rect.height };
-    SDL_FillRect(global_screen, &split_line, 0x64645e);
+    SDL_FillRect(globals::screen, &split_line, 0x64645e);
 }
 
-// TODO: Create namespace application and move resize and redraw window
+// TODO(Cleaup): Create namespace application and move resize and redraw window
 // functions and all globals there!
-// TODO: Check if something here can fail, if not change the type to void.
+// TODO(Cleanup): Check if something here can fail, if not change the type to void.
 static int ResizeWindow()
 {
-    global_windows_arr[0].UpdateSize(Rect {
-            0, global_window_h - 17 +1,
-            global_window_w, 17 });
-    global_windows_arr[1].UpdateSize(Rect {
+    globals::windows_arr[0].UpdateSize(Rect {
+            0, globals::window_h - 17 +1,
+            globals::window_w, 17 });
+    globals::windows_arr[1].UpdateSize(Rect {
             0, 0,
-            global_window_w, global_window_h - 17 });
+            globals::window_w, globals::window_h - 17 });
 
     return 0;
 }
 
-// TODO: Check if any of these functions can fail and handle this.
-// TODO: Check if something here can fail, if not change the type to void.
+// TODO(Cleaup): Check if something here can fail, if not change the type to void.
 static int RedrawWindow()
 {
-    global_screen = SDL_GetWindowSurface(global_window);
-    if (!global_screen)
+    globals::screen = SDL_GetWindowSurface(globals::window);
+    if (!globals::screen)
     {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
                      "\e[91;1mCouldnt get the right surface of the window!\e[0m");
         assert(false);
     }
 
-    SDL_GetWindowSize(global_window, &global_window_w, &global_window_h);
+    SDL_GetWindowSize(globals::window, &globals::window_w, &globals::window_h);
 
-    if (global_window_w == 0 || global_window_h == 0)
+    if (globals::window_w == 0 || globals::window_h == 0)
         assert(!"Size is 0");
 
     // Fill the whole screen, just in case.
-    const SDL_Rect whole_screen = { 0, 0, global_window_w, global_window_h };
-    SDL_FillRect(global_screen, &whole_screen, 0xff00ff); // Color suggesting error.
+    const SDL_Rect whole_screen = { 0, 0, globals::window_w, globals::window_h };
+    SDL_FillRect(globals::screen, &whole_screen, 0xff00ff); // Color suggesting error.
 
-    assert(global_number_of_windows > 0);
-    const EditorWindow main_window = global_windows_arr[1];
-    const EditorWindow mini_buffer_window = global_windows_arr[0];
+    assert(globals::number_of_windows > 0);
+    const EditorWindow main_window = globals::windows_arr[1];
+    const EditorWindow mini_buffer_window = globals::windows_arr[0];
 
     // TODO(Splitting lines): Decide how i want to draw them.
 #if 0
-    DrawSplittingLine({ 0, global_window_h - 17, global_window_w, 1 });
+    DrawSplittingLine({ 0, globals::window_h - 17, globals::window_w, 1 });
 #endif
 
-#if 0
-    // Minibufer takes the fixed size of the window, so we draw it first, here:
-    DrawWindowOnRect(mini_buffer_window,
-                     Rect { 0, global_window_h - 17 +1, global_window_w, 17 },
-                     global_current_window_idx == 0);
-
-    DrawWindowOnRect(main_window,
-                     Rect { 0, 0, global_window_w, global_window_h - 17 },
-                     global_current_window_idx == 1);
-#else // 0
-    mini_buffer_window.Redraw(false);
-    main_window.Redraw(false);
-#endif // 0
-    SDL_UpdateWindowSurface(global_window);
+    mini_buffer_window.Redraw(globals::current_window_idx == 0);
+    main_window.Redraw(globals::current_window_idx == 1);
 
     return 0;
 }
-
-static int global_window_idx_before_entering_minibuffer;
-
-enum WindowTraverseMode { WIN_TRAVERSE_FORWARD, WIN_TRAVERSE_BACKWARDS };
 
 // If traverse is forward, we pick the first window in the subtree of the
 // root_window, otherwise we pick the last one (we always go either left or
@@ -376,7 +386,7 @@ static EditorWindow *GetNextOrPrevActiveWindow(const EditorWindow *current_windo
 {
     EditorWindow *parent = current_window->parent_ptr;
     if (!parent)
-        return GetFirstOrLastWindowInSubtree(global_windows_arr + 1, traverse);
+        return GetFirstOrLastWindowInSubtree(globals::windows_arr + 1, traverse);
 
     // Parent must be splited window.
     assert(!parent->contains_buffer);
@@ -390,7 +400,7 @@ static EditorWindow *GetNextOrPrevActiveWindow(const EditorWindow *current_windo
         }
     assert(index_in_parent >= 0);
 
-    // TODO: Compress this better!
+    // TODO(Cleaup): Compress this better!
     if (traverse == WindowTraverseMode::WIN_TRAVERSE_FORWARD)
     {
         if (index_in_parent + 1 >= parent->number_of_windows)
@@ -433,51 +443,51 @@ static EditorWindow *GetNextOrPrevActiveWindow(const EditorWindow *current_windo
 // the previous one.
 static void SwitchWindow(const WindowTraverseMode traverse)
 {
-    if (global_current_window_idx == 0)
+    if (globals::current_window_idx == 0)
     {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
                      "\e[91;1mCannot switch window in minibuffer!\e[0m");
         return;
     }
 
-    // TODO: Do we assume there is at least one buffer at a time?
-    // TODO: What if there is just minibuffer?
-    assert(global_number_of_buffers);
+    // TODO(Cleaup): Do we assume there is at least one buffer at a time?
+    // TODO(Cleaup): What if there is just minibuffer?
+    assert(globals::number_of_buffers);
     EditorWindow *next_window = nullptr;
 
     next_window = GetNextOrPrevActiveWindow(
-        global_windows_arr + global_current_window_idx,
+        globals::windows_arr + globals::current_window_idx,
         traverse);
 
     assert(next_window);
-    global_current_window_idx = next_window - global_windows_arr;
+    globals::current_window_idx = next_window - globals::windows_arr;
 }
 
 static void SwitchToMiniBuffer()
 {
-    if (global_current_window_idx == 0)
+    if (globals::current_window_idx == 0)
     {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
                      "\e[91;1mAlready in minibuffer\e[0m");
         return;
     }
 
-    global_window_idx_before_entering_minibuffer
-        = global_current_window_idx;
-    global_current_window_idx = 0;
+    globals::window_idx_before_entering_minibuffer
+        = globals::current_window_idx;
+    globals::current_window_idx = 0;
 }
 
 static void SwitchOutFromMiniBuffer()
 {
-    if (global_current_window_idx != 0)
+    if (globals::current_window_idx != 0)
     {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
                      "\e[91;1mNot in minibuffer\e[0m");
         return;
     }
 
-    global_current_window_idx
-        = global_window_idx_before_entering_minibuffer;
+    globals::current_window_idx
+        = globals::window_idx_before_entering_minibuffer;
 }
 
 static int HandleEvent(const SDL_Event &event)
@@ -520,9 +530,9 @@ static int HandleEvent(const SDL_Event &event)
             // H - Split horizontally.
             else if (event.key.keysym.sym == 104)
             {
-                if (global_current_window_idx != 0)
+                if (globals::current_window_idx != 0)
                 {
-                    global_windows_arr[global_current_window_idx].
+                    globals::windows_arr[globals::current_window_idx].
                         SplitWindow(WindowSplit::WIN_SPLIT_HORIZONTAL);
                 }
                 else
@@ -534,9 +544,9 @@ static int HandleEvent(const SDL_Event &event)
             // V - Split vertically.
             else if (event.key.keysym.sym == 118)
             {
-                if (global_current_window_idx != 0)
+                if (globals::current_window_idx != 0)
                 {
-                    global_windows_arr[global_current_window_idx].
+                    globals::windows_arr[globals::current_window_idx].
                         SplitWindow(WindowSplit::WIN_SPLIT_VERTCAL);
                 }
                 else
@@ -546,11 +556,11 @@ static int HandleEvent(const SDL_Event &event)
                 }
             }
 
-            if (global_windows_arr[global_current_window_idx].contains_buffer)
+            if (globals::windows_arr[globals::current_window_idx].contains_buffer)
             {
                 SDL_Log("Current window: %d (with color: %x)",
-                        global_current_window_idx,
-                        global_windows_arr[global_current_window_idx]
+                        globals::current_window_idx,
+                        globals::windows_arr[globals::current_window_idx]
                             .buffer_ptr->color);
             }
 #else
@@ -672,16 +682,16 @@ static int HandleEvent(const SDL_Event &event)
 
 static int InitSDL()
 {
-    // TODO: Possibly inicialize with SDL_INIT_EVENTS?
+    // TODO(Platform): Possibly inicialize with SDL_INIT_EVENTS?
     if (FAILED(SDL_Init(SDL_INIT_VIDEO)))
     {
-        // TODO: Logging.
+        // TODO(Debug): Logging.
         return -1;
     }
 
     if (FAILED(TTF_Init()))
     {
-        // TODO: Logging.
+        // TODO(Debug): Logging.
         return -1;
     }
 
@@ -692,35 +702,57 @@ static int InitWindow(const int width, const int height)
 {
     // NOTE(Testing): Sometimes it is good to set width and height to 0, 0 and
     // test what happens when window is smallest possible.
-    global_window = SDL_CreateWindow("Editor",
+    globals::window = SDL_CreateWindow("Editor",
                                      SDL_WINDOWPOS_UNDEFINED,
                                      SDL_WINDOWPOS_UNDEFINED,
                                      width, height, 0);
-                                     // 0, 0, 0);
+                                     // 0, 0, 0); // To test corner-cases.
 
-    if (!global_window)
+    if (!globals::window)
     {
-        // TODO: Logging.
+        // TODO(Debug): Logging.
         return -1;
     }
 
     // Instead of creating a renderer, draw directly to the screen.
-    global_screen = SDL_GetWindowSurface(global_window);
+    globals::screen = SDL_GetWindowSurface(globals::window);
 
-    if (!global_screen)
+    if (!globals::screen)
     {
-        // TODO: Logging.
+        // TODO(Debug): Logging.
         return -1;
     }
 
     return 0;
 }
 
+// Makes sure that the main window tree is done correctly. Inside horizontal
+// split window cannot be another horizontal etc...
+static bool Validate(EditorWindow *window)
+{
+    if (window->contains_buffer)
+        return true;
+    else
+    {
+        WindowSplit split = window->split;
+        for (int i = 0; i < window->number_of_windows; ++i)
+            if (window->split_windows[i]->split == split)
+                return false;
+
+        bool invalid = false;
+        for (int i = 0; i < window->number_of_windows; ++i)
+            if (!Validate(window->split_windows[i]))
+                invalid = true;
+
+        return !invalid;
+    }
+}
+
 int main(void)
 {
     if (FAILED(InitSDL()))
     {
-        // TODO: Logging.
+        // TODO(Debug): Logging.
         exit(1);
     }
 
@@ -737,52 +769,51 @@ int main(void)
                 0, current.w, current.h, current.refresh_rate);
 
     // The size of the window to render.
-    global_window_w = current.w / 3;
-    global_window_h = current.h / 2;
+    globals::window_w = current.w / 3;
+    globals::window_h = current.h / 2;
 
-    int window_x = current.w / 2 - global_window_w / 2,
-        window_y = current.h / 2 - global_window_h / 2;
+    int window_x = current.w / 2 - globals::window_w / 2,
+        window_y = current.h / 2 - globals::window_h / 2;
 
-    // TODO: Use values based on screen width/height, or let user set his own.
-    if (FAILED(InitWindow(global_window_w, global_window_h)))
+    // TODO(Platform): Use values based on screen width/height, or let user set his own.
+    if (FAILED(InitWindow(globals::window_w, globals::window_h)))
     {
-        // TODO: Logging.
+        // TODO(Debug): Logging.
         exit(1);
     }
-    SDL_SetWindowPosition(global_window, window_x, window_y);
-
+    SDL_SetWindowPosition(globals::window, window_x, window_y);
 
     InitializeFirstWindow();
 
-    // TODO: Make it same as background color!
-    const SDL_Rect foo = { 0, 0, global_window_w, global_window_h };
-    SDL_FillRect(global_screen, &foo, 0x272822);
+    // TODO(Platform): Make it same as background color!
+    const SDL_Rect foo = { 0, 0, globals::window_w, globals::window_h };
+    SDL_FillRect(globals::screen, &foo, 0x272822);
 
 #if 0
-    assert(global_bitmap_surface);
+    assert(globals::bitmap_surface);
 #endif
 
     TTF_Font *font_test =
-        TTF_OpenFont("/usr/share/fonts/TTF/DejaVuSansMono.ttf", global_font_size);
+        TTF_OpenFont("/usr/share/fonts/TTF/DejaVuSansMono.ttf", globals::font_size);
 
-    if (!(text_surface[0] = TTF_RenderText_Solid(font_test,
+    if (!(globals::text_surface[0] = TTF_RenderText_Solid(font_test,
                                                  "This text is: Solid",
                                                  (SDL_Color){0xF8, 0xF8, 0xF8, 255}))
 
-        || !(text_surface[1] = TTF_RenderText_Shaded(font_test,
+        || !(globals::text_surface[1] = TTF_RenderText_Shaded(font_test,
                                                      "This text is: Shaded",
                                                      (SDL_Color){0xF8, 0xF8, 0xF8, 255},
                                                      (SDL_Color){0x15, 0x15, 0x80, 0xFF}))
 
-        || !(text_surface[2] = TTF_RenderText_Blended(font_test,
+        || !(globals::text_surface[2] = TTF_RenderText_Blended(font_test,
                                                       "Compilation started at Fri Jun",
                                                       (SDL_Color){0xF8, 0xF8, 0xF8, 255}))
 
-        || !(text_surface[3] = TTF_RenderText_Blended(font_test,
+        || !(globals::text_surface[3] = TTF_RenderText_Blended(font_test,
                                                       "#define",
                                                       (SDL_Color){0xF9, 0x26, 0x72, 255})))
     {
-        // TODO: handle error here, perhaps print TTF_GetError at least.
+        // TODO(Debug): handle error here, perhaps print TTF_GetError at least.
         assert(false);
     }
 
@@ -792,7 +823,7 @@ int main(void)
     for (;;)
     {
         int width, height;
-        SDL_GetWindowSize(global_window, &width, &height);
+        SDL_GetWindowSize(globals::window, &width, &height);
         SDL_Log("SIZE: %d x %d\n", width, height);
 
         SDL_Event event;
@@ -802,21 +833,24 @@ int main(void)
             break;
 
         static float diff = 0.01f;
-        global_windows_arr[0].splits_percentages[0] += diff;
-        if (global_windows_arr[0].splits_percentages[0] > 0.9f)
+        globals::windows_arr[0].splits_percentages[0] += diff;
+        if (globals::windows_arr[0].splits_percentages[0] > 0.9f)
         {
-            global_windows_arr[0].splits_percentages[0] = 0.9f;
+            globals::windows_arr[0].splits_percentages[0] = 0.9f;
             diff *= -1;
         }
-        else if (global_windows_arr[0].splits_percentages[0] < 0.1f)
+        else if (globals::windows_arr[0].splits_percentages[0] < 0.1f)
         {
-            global_windows_arr[0].splits_percentages[0] = 0.1f;
+            globals::windows_arr[0].splits_percentages[0] = 0.1f;
             diff *= -1;
         }
 
         // Move it to some event occurences or make a dirty-bit system.
-        // TODO: Redraw window only if something got dirty.
+        // TODO(Profiling): Redraw window only if something got dirty.
         RedrawWindow();
+
+        if (!Validate(globals::windows_arr + 1))
+            assert(false);
     }
 
     TTF_Quit();
