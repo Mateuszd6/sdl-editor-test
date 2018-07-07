@@ -351,6 +351,7 @@ static int RedrawWindow()
     mini_buffer_window.Redraw(globals::current_window_idx == 0);
     main_window.Redraw(globals::current_window_idx == 1);
 
+    SDL_UpdateWindowSurface(globals::window);
     return 0;
 }
 
