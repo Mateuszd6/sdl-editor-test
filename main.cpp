@@ -1,17 +1,19 @@
-#include <assert.h>
-#include <stdint.h>
 #include <stdio.h>
 
 #include <SDL.h>
 #include <SDL_ttf.h>
 
+#define DEBUG
+#define LOGGING
+#include "debug_goodies.h"
+
 // #define RANDOM_WINDOW_COLORS
 #ifdef RANDOM_WINDOW_COLORS
-// TODO(Temporary):
-#include <time.h>
-#define WINDOW_COLOR (rand())
+  // TODO(Temporary):
+  #include <time.h>
+  #define WINDOW_COLOR (rand())
 #else
-#define WINDOW_COLOR (0xffffff)
+  #define WINDOW_COLOR (0xffffff)
 #endif
 
 // TODO(Cleanup): Move to other config file!
@@ -143,7 +145,7 @@ void EditorWindow::SplitWindow(WindowSplit split_type)
         EditorBuffer *previous_buffer_ptr = buffer_ptr;
 
         // parent_ptr cannot contain buffer!
-        assert(!parent_ptr || !parent_ptr->contains_buffer);
+        ASSERT(!parent_ptr || !parent_ptr->contains_buffer);
 
         if (!parent_ptr || parent_ptr->split != split_type)
         {
@@ -160,7 +162,7 @@ void EditorWindow::SplitWindow(WindowSplit split_type)
         else
         {
             // TODO: Make sure that this assertion won't fire.
-            assert(parent_ptr->number_of_windows < MAX_WINDOWS_ON_SPLIT - 1);
+            ASSERT(parent_ptr->number_of_windows < MAX_WINDOWS_ON_SPLIT - 1);
 
             int index_in_parent = -1;
             for (int i = 0; i < parent_ptr->number_of_windows; ++i)
@@ -169,7 +171,7 @@ void EditorWindow::SplitWindow(WindowSplit split_type)
                     index_in_parent = i;
                     break;
                 }
-            assert(index_in_parent >= 0);
+            ASSERT(index_in_parent >= 0);
 
             // Move windows with bigger index by one in the array.
             for (int i = parent_ptr->number_of_windows; i >= index_in_parent + 1; --i)
@@ -196,8 +198,7 @@ void EditorWindow::SplitWindow(WindowSplit split_type)
     }
     else
     {
-        // TODO(Debug): Info, that something has gone horribly wrong...
-        assert(false);
+        PANIC("This windows cannot be splited and should never ever be focused!");
     }
 }
 
@@ -212,10 +213,10 @@ void EditorWindow::UpdateSize(Rect new_rect)
         // In range of (min_pos - max_pos);
         int split_idx[MAX_WINDOWS_ON_SPLIT];
 
-        assert(number_of_windows >= 2);
+        ASSERT(number_of_windows >= 2);
 
         for (int i = 0; i < number_of_windows-1; ++i)
-            assert(splits_percentages[i] > 0 &&
+            ASSERT(splits_percentages[i] > 0 &&
                    splits_percentages[i] < 1 &&
                    (i < number_of_windows-2
                     ? splits_percentages[i] < splits_percentages[i+1]
@@ -226,7 +227,7 @@ void EditorWindow::UpdateSize(Rect new_rect)
         int max_pos = (split == WindowSplit::WIN_SPLIT_HORIZONTAL
                        ? position.x + position.width : position.y + position.height);
         int difference = max_pos - min_pos;
-        assert(difference > 0);
+        ASSERT(difference > 0);
 
         for (int i = 0; i < number_of_windows-1; ++i)
         {
@@ -238,7 +239,7 @@ void EditorWindow::UpdateSize(Rect new_rect)
             if (i > 0)
                 split_idx[i] += 1;
 
-            assert(min_pos < split_idx[i] && split_idx[i] < max_pos);
+            ASSERT(min_pos < split_idx[i] && split_idx[i] < max_pos);
         }
         split_idx[number_of_windows-1] = max_pos;
 
@@ -348,21 +349,21 @@ static int RedrawWindow()
     globals::screen = SDL_GetWindowSurface(globals::window);
     if (!globals::screen)
     {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
-                     "\e[91;1mCouldnt get the right surface of the window!\e[0m");
-        assert(false);
+        PANIC("Couldnt get the right surface of the window!");
     }
 
     SDL_GetWindowSize(globals::window, &globals::window_w, &globals::window_h);
 
+    // This is probobly obsolete and should be removed. THis bug was fixed long time ago.
+    // This used to happen when too many windows were created due to the stack smashing.
     if (globals::window_w == 0 || globals::window_h == 0)
-        assert(!"Size is 0");
+        PANIC("Size is 0!");
 
     // Fill the whole screen, just in case.
     const SDL_Rect whole_screen = { 0, 0, globals::window_w, globals::window_h };
     SDL_FillRect(globals::screen, &whole_screen, 0xff00ff); // Color suggesting error.
 
-    assert(globals::number_of_windows > 0);
+    ASSERT(globals::number_of_windows > 0);
     const EditorWindow main_window = globals::windows_arr[1];
     const EditorWindow mini_buffer_window = globals::windows_arr[0];
 
@@ -395,7 +396,7 @@ static EditorWindow *GetFirstOrLastWindowInSubtree(EditorWindow *const root_wind
         window_to_pick_idx = 0;
     else
     {
-        assert (traverse == WindowTraverseMode::WIN_TRAVERSE_BACKWARDS);
+        ASSERT (traverse == WindowTraverseMode::WIN_TRAVERSE_BACKWARDS);
         window_to_pick_idx = next_window->number_of_windows - 1;
     }
 
@@ -413,7 +414,7 @@ static EditorWindow *GetNextOrPrevActiveWindow(const EditorWindow *current_windo
         return GetFirstOrLastWindowInSubtree(globals::windows_arr + 1, traverse);
 
     // Parent must be splited window.
-    assert(!parent->contains_buffer);
+    ASSERT(!parent->contains_buffer);
 
     int index_in_parent = -1;
     for (int i = 0; i < parent->number_of_windows; ++i)
@@ -422,7 +423,7 @@ static EditorWindow *GetNextOrPrevActiveWindow(const EditorWindow *current_windo
             index_in_parent = i;
             break;
         }
-    assert(index_in_parent >= 0);
+    ASSERT(index_in_parent >= 0);
 
     // TODO(Cleaup): Compress this better!
     if (traverse == WindowTraverseMode::WIN_TRAVERSE_FORWARD)
@@ -445,7 +446,7 @@ static EditorWindow *GetNextOrPrevActiveWindow(const EditorWindow *current_windo
 
     else
     {
-        assert(traverse == WindowTraverseMode::WIN_TRAVERSE_BACKWARDS);
+        ASSERT(traverse == WindowTraverseMode::WIN_TRAVERSE_BACKWARDS);
         if (index_in_parent == 0)
         {
             // First window in this split - we must go to the parent window and
@@ -469,21 +470,20 @@ static void SwitchWindow(const WindowTraverseMode traverse)
 {
     if (globals::current_window_idx == 0)
     {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
-                     "\e[91;1mCannot switch window in minibuffer!\e[0m");
+        LOG_WARN("Cannot switch window in minibuffer!");
         return;
     }
 
     // TODO(Cleaup): Do we assume there is at least one buffer at a time?
     // TODO(Cleaup): What if there is just minibuffer?
-    assert(globals::number_of_buffers);
+    ASSERT(globals::number_of_buffers);
     EditorWindow *next_window = nullptr;
 
     next_window = GetNextOrPrevActiveWindow(
         globals::windows_arr + globals::current_window_idx,
         traverse);
 
-    assert(next_window);
+    ASSERT(next_window);
     globals::current_window_idx = next_window - globals::windows_arr;
 }
 
@@ -491,8 +491,7 @@ static void SwitchToMiniBuffer()
 {
     if (globals::current_window_idx == 0)
     {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
-                     "\e[91;1mAlready in minibuffer\e[0m");
+        LOG_WARN("Already in minibuffer");
         return;
     }
 
@@ -505,8 +504,7 @@ static void SwitchOutFromMiniBuffer()
 {
     if (globals::current_window_idx != 0)
     {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
-                     "\e[91;1mNot in minibuffer\e[0m");
+        LOG_WARN("Not in minibuffer");
         return;
     }
 
@@ -522,7 +520,7 @@ static int HandleEvent(const SDL_Event &event)
     {
         case SDL_QUIT:
         {
-            SDL_Log("SDL_QUIT\n");
+            LOG_INFO("MSG ---> SDL_QUIT");
             shouldQuit = 1;
         } break;
 
@@ -561,8 +559,7 @@ static int HandleEvent(const SDL_Event &event)
                 }
                 else
                 {
-                    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
-                                 "\e[93;1mCannot split minibuffer!\e[0m");
+                    LOG_WARN("Cannot split minibuffer");
                 }
             }
             // V - Split vertically.
@@ -575,26 +572,24 @@ static int HandleEvent(const SDL_Event &event)
                 }
                 else
                 {
-                    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
-                                 "\e[93;1mCannot split minibuffer!\e[0m");
+                    LOG_WARN("Cannot split minibuffer");
                 }
             }
 
             if (globals::windows_arr[globals::current_window_idx].contains_buffer)
             {
-                SDL_Log("Current window: %d (with color: %x)",
-                        globals::current_window_idx,
-                        globals::windows_arr[globals::current_window_idx]
-                            .buffer_ptr->color);
+                LOG_INFO("Current window: %d (with color: %x)",
+                         globals::current_window_idx,
+                         globals::windows_arr[globals::current_window_idx].buffer_ptr->color);
             }
 #else
-            SDL_Log("KEY DOWN %d\n", event.key.keysym.sym);
+            LOG_INFO("MSG ---> KEY DOWN %d", event.key.keysym.sym);
 #endif
         } break;
 
         case SDL_KEYUP:
         {
-            SDL_Log("KEY UP\n");
+            LOG_INFO("MSG ---> KEY UP %d", event.key.keysym.sym);
         } break;
 
         case SDL_WINDOWEVENT:
@@ -603,95 +598,95 @@ static int HandleEvent(const SDL_Event &event)
             {
                 case SDL_WINDOWEVENT_SHOWN:
                 {
-                    SDL_Log("Window %d shown", event.window.windowID);
+                    LOG_INFO("MSG ---> Window %d shown", event.window.windowID);
                 } break;
 
                 case SDL_WINDOWEVENT_HIDDEN:
                 {
-                    SDL_Log("Window %d hidden", event.window.windowID);
+                    LOG_INFO("MSG ---> Window %d hidden", event.window.windowID);
                 } break;
 
                 case SDL_WINDOWEVENT_EXPOSED:
                 {
-                    SDL_Log("Window %d exposed", event.window.windowID);
+                    LOG_INFO("MSG ---> Window %d exposed", event.window.windowID);
                 } break;
 
                 case SDL_WINDOWEVENT_MOVED:
                 {
-                    SDL_Log("Window %d moved to %d,%d",
-                            event.window.windowID,
-                            event.window.data1,
-                            event.window.data2);
+                    LOG_INFO("MSG ---> Window %d moved to %d,%d",
+                             event.window.windowID,
+                             event.window.data1,
+                             event.window.data2);
                 } break;
 
                 case SDL_WINDOWEVENT_RESIZED:
                 case SDL_WINDOWEVENT_SIZE_CHANGED:
                 {
-                    SDL_Log("Window %d resized", event.window.windowID);
+                    LOG_INFO("MSG ---> Window %d resized", event.window.windowID);
                     ResizeWindow();
                 } break;
 
                 case SDL_WINDOWEVENT_MINIMIZED:
                 {
-                    SDL_Log("Window %d minimized", event.window.windowID);
+                    LOG_INFO("MSG ---> Window %d minimized", event.window.windowID);
                 } break;
 
                 case SDL_WINDOWEVENT_MAXIMIZED:
                 {
-                    SDL_Log("Window %d maximized", event.window.windowID);
+                    LOG_INFO("MSG ---> Window %d maximized", event.window.windowID);
                 } break;
 
                 case SDL_WINDOWEVENT_RESTORED:
                 {
-                    SDL_Log("Window %d restored", event.window.windowID);
+                    LOG_INFO("MSG ---> Window %d restored", event.window.windowID);
                 } break;
 
                 case SDL_WINDOWEVENT_ENTER:
                 {
-                    SDL_Log("Mouse entered window %d", event.window.windowID);
+                    LOG_INFO("MSG ---> Mouse entered window %d", event.window.windowID);
                 } break;
 
                 case SDL_WINDOWEVENT_LEAVE:
                 {
-                    SDL_Log("Mouse left window %d", event.window.windowID);
+                    LOG_INFO("MSG ---> Mouse left window %d", event.window.windowID);
                 } break;
 
                 case SDL_WINDOWEVENT_FOCUS_GAINED:
                 {
-                    SDL_Log("Window %d gained keyboard focus",
+                    LOG_INFO("MSG ---> Window %d gained keyboard focus",
                             event.window.windowID);
                 } break;
 
                 case SDL_WINDOWEVENT_FOCUS_LOST:
                 {
-                    SDL_Log("Window %d lost keyboard focus",
+                    LOG_INFO("MSG ---> Window %d lost keyboard focus",
                             event.window.windowID);
                 } break;
 
                 case SDL_WINDOWEVENT_CLOSE:
                 {
-                    SDL_Log("Window %d closed", event.window.windowID);
+                    LOG_INFO("MSG ---> Window %d closed", event.window.windowID);
                 } break;
 
 #if SDL_VERSION_ATLEAST(2, 0, 5)
                 case SDL_WINDOWEVENT_TAKE_FOCUS:
                 {
-                    SDL_Log("Window %d is offered a focus",
-                            event.window.windowID);
+                    LOG_INFO("MSG ---> Window %d is offered a focus",
+                             event.window.windowID);
                 } break;
 
                 case SDL_WINDOWEVENT_HIT_TEST:
                 {
-                    SDL_Log("Window %d has a special hit test",
-                            event.window.windowID);
+                    LOG_INFO("MSG ---> Window %d has a special hit test",
+                             event.window.windowID);
                 } break;
 #endif
 
                 default:
                 {
-                    SDL_Log("Window %d got unknown event %d",
-                            event.window.windowID,
-                            event.window.event);
+                    LOG_INFO("MSG ---> Window %d got unknown event %d",
+                             event.window.windowID,
+                             event.window.event);
                 } break;
             }
         } break;
@@ -727,10 +722,10 @@ static int InitWindow(const int width, const int height)
     // NOTE(Testing): Sometimes it is good to set width and height to 0, 0 and
     // test what happens when window is smallest possible.
     globals::window = SDL_CreateWindow("Editor",
-                                     SDL_WINDOWPOS_UNDEFINED,
-                                     SDL_WINDOWPOS_UNDEFINED,
-                                     width, height, 0);
-                                     // 0, 0, 0); // To test corner-cases.
+                                       SDL_WINDOWPOS_UNDEFINED,
+                                       SDL_WINDOWPOS_UNDEFINED,
+                                       width, height, 0);
+                                       // 0, 0, 0); // To test corner-cases.
 
     if (!globals::window)
     {
@@ -785,12 +780,12 @@ int main(void)
     SDL_DisplayMode current;
 
     if (SDL_GetCurrentDisplayMode(0, &current) != 0)
-        SDL_Log("Could not get display mode for video display #%d: %s",
-                0, SDL_GetError());
+        LOG_INFO("Could not get display mode for video display #%d: %s",
+                 0, SDL_GetError());
     else
         // On success, print the current display mode.
-        SDL_Log("Display #%d: current display mode is %dx%dpx @ %dhz.",
-                0, current.w, current.h, current.refresh_rate);
+        LOG_INFO("Display #%d: current display mode is %dx%dpx @ %dhz.",
+                 0, current.w, current.h, current.refresh_rate);
 
     // The size of the window to render.
     globals::window_w = current.w / 3;
@@ -838,7 +833,7 @@ int main(void)
                                                       (SDL_Color){0xF9, 0x26, 0x72, 255})))
     {
         // TODO(Debug): handle error here, perhaps print TTF_GetError at least.
-        assert(false);
+        ASSERT(false);
     }
 
     TTF_CloseFont(font_test);
@@ -848,7 +843,7 @@ int main(void)
     {
         int width, height;
         SDL_GetWindowSize(globals::window, &width, &height);
-        SDL_Log("SIZE: %d x %d\n", width, height);
+        LOG_INFO("Current window size: %d x %d", width, height);
 
         SDL_Event event;
         SDL_WaitEvent(&event);
@@ -873,8 +868,10 @@ int main(void)
         // TODO(Profiling): Redraw window only if something got dirty.
         RedrawWindow();
 
-        if (!Validate(globals::windows_arr + 1))
-            assert(false);
+#ifdef DEBUG
+        // Validate main window tree structure.
+        ASSERT(Validate(globals::windows_arr + 1));
+#endif
     }
 
     TTF_Quit();
