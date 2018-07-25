@@ -5,6 +5,8 @@
 
 #define DEBUG
 #define LOGGING
+#define DG_LOG_LVL DG_LOG_LVL_WARN // DG_LOG_LVL_ALL
+#define DG_USE_COLORS 1
 #include "debug_goodies.h"
 
 // #define RANDOM_WINDOW_COLORS
@@ -35,7 +37,7 @@ struct EditorBuffer
     int color;
 };
 
-#define MAX_WINDOWS_ON_SPLIT (4)
+#define MAX_WINDOWS_ON_SPLIT (10)
 
 struct EditorWindow
 {
@@ -108,7 +110,7 @@ namespace globals
     static int current_window_idx;
 
     // Index of active window before entering minibuffer.
-    // TODO(Cleaup): Default value.
+    // TODO(Cleanup): Default value.
     static int window_idx_before_entering_minibuffer;
 }
 
@@ -152,6 +154,7 @@ void EditorWindow::SplitWindow(WindowSplit split_type)
             // We must create new window, which holds these two:
             split = split_type;
             splits_percentages[0] = 0.5f;
+            splits_percentages[1] = 1.0f;
             split_windows[0] = CreateNewWindowWithBuffer(previous_buffer_ptr, this);
             split_windows[1] = CreateNewWindowWithBuffer(new_buffer, this);
             number_of_windows = 2;
@@ -161,7 +164,7 @@ void EditorWindow::SplitWindow(WindowSplit split_type)
         }
         else
         {
-            // TODO: Make sure that this assertion won't fire.
+            // TODO(Cleanup): Make sure that this assertion won't fire.
             ASSERT(parent_ptr->number_of_windows < MAX_WINDOWS_ON_SPLIT - 1);
 
             int index_in_parent = -1;
@@ -194,6 +197,12 @@ void EditorWindow::SplitWindow(WindowSplit split_type)
 
             // We can safetly increment this, becasue of the check above.
             parent_ptr->number_of_windows++;
+
+            // TODO(Cleanup): i think this should be false, because parent must
+            // be split window (does not contain a single buffer), and therefore
+            // cannot be selected.
+            parent_ptr->UpdateSize(parent_ptr->position);
+            parent_ptr->Redraw(false);
         }
     }
     else
@@ -202,6 +211,7 @@ void EditorWindow::SplitWindow(WindowSplit split_type)
     }
 }
 
+// TODO(Cleanup): Summary
 void EditorWindow::UpdateSize(Rect new_rect)
 {
     position = new_rect;
@@ -281,15 +291,18 @@ void EditorWindow::Redraw(bool current_select) const
             position.width, position.height
         };
 
-        SDL_FillRect(globals::screen, &sdl_rect,
+        SDL_FillRect(globals::screen,
+                     &sdl_rect,
                      current_select ? 0xddee22 : buffer_ptr->color);
     }
     else
+    {
         for (int i = 0; i < number_of_windows; ++i)
         {
             split_windows[i]->Redraw(globals::current_window_idx ==
                                      (split_windows[i] - globals::windows_arr));
         }
+    }
 }
 
 // TODO(Cleanup): Would be nice to add them using regular, add-window/buffer API.
@@ -328,7 +341,7 @@ static void DrawSplittingLine(const Rect &rect)
     SDL_FillRect(globals::screen, &split_line, 0x64645e);
 }
 
-// TODO(Cleaup): Create namespace application and move resize and redraw window
+// TODO(Cleanup): Create namespace application and move resize and redraw window
 // functions and all globals there!
 // TODO(Cleanup): Check if something here can fail, if not change the type to void.
 static int ResizeWindow()
@@ -343,14 +356,12 @@ static int ResizeWindow()
     return 0;
 }
 
-// TODO(Cleaup): Check if something here can fail, if not change the type to void.
+// TODO(Cleanup): Check if something here can fail, if not change the type to void.
 static int RedrawWindow()
 {
     globals::screen = SDL_GetWindowSurface(globals::window);
     if (!globals::screen)
-    {
         PANIC("Couldnt get the right surface of the window!");
-    }
 
     SDL_GetWindowSize(globals::window, &globals::window_w, &globals::window_h);
 
@@ -425,7 +436,7 @@ static EditorWindow *GetNextOrPrevActiveWindow(const EditorWindow *current_windo
         }
     ASSERT(index_in_parent >= 0);
 
-    // TODO(Cleaup): Compress this better!
+    // TODO(Cleanup): Compress this better!
     if (traverse == WindowTraverseMode::WIN_TRAVERSE_FORWARD)
     {
         if (index_in_parent + 1 >= parent->number_of_windows)
@@ -443,7 +454,6 @@ static EditorWindow *GetNextOrPrevActiveWindow(const EditorWindow *current_windo
                 traverse);
         }
     }
-
     else
     {
         ASSERT(traverse == WindowTraverseMode::WIN_TRAVERSE_BACKWARDS);
@@ -474,8 +484,8 @@ static void SwitchWindow(const WindowTraverseMode traverse)
         return;
     }
 
-    // TODO(Cleaup): Do we assume there is at least one buffer at a time?
-    // TODO(Cleaup): What if there is just minibuffer?
+    // TODO(Cleanup): Do we assume there is at least one buffer at a time?
+    // TODO(Cleanup): What if there is just minibuffer?
     ASSERT(globals::number_of_buffers);
     EditorWindow *next_window = nullptr;
 
@@ -767,6 +777,21 @@ static bool Validate(EditorWindow *window)
     }
 }
 
+static void DEBUG_PrintWindowsState(const EditorWindow *window)
+{
+    if (!window)
+        printf(" (nullptr) ");
+    else if (window->contains_buffer)
+        printf(" (Buffer: %ld) ", window->buffer_ptr - globals::buffers);
+    else
+    {
+        printf(" (%c){ ", window->split == WindowSplit::WIN_SPLIT_HORIZONTAL ? 'H' : 'V');
+        for(int i = 0; i < window->number_of_windows; ++i)
+            DEBUG_PrintWindowsState(window->split_windows[i]);
+        printf("} ");
+    }
+}
+
 int main(void)
 {
     if (FAILED(InitSDL()))
@@ -872,6 +897,14 @@ int main(void)
         // Validate main window tree structure.
         ASSERT(Validate(globals::windows_arr + 1));
 #endif
+
+        // Some printing stuff:
+        // DFS traverse the windows tree, and print the current window state:
+        if (false)
+        {
+            DEBUG_PrintWindowsState(globals::windows_arr + 1);
+            printf("\n");
+        }
     }
 
     TTF_Quit();
