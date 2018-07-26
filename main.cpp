@@ -5,7 +5,7 @@
 
 #define DEBUG
 #define LOGGING
-#define DG_LOG_LVL DG_LOG_LVL_WARN // DG_LOG_LVL_ALL
+#define DG_LOG_LVL DG_LOG_LVL_ALL // DG_LOG_LVL_WARN
 #define DG_USE_COLORS 1
 #include "debug_goodies.h"
 
@@ -38,6 +38,7 @@ struct EditorBuffer
 };
 
 #define MAX_WINDOWS_ON_SPLIT (10)
+#define MIN_PERCANTAGE_WINDOW_SPLIT (0.2f)
 
 struct EditorWindow
 {
@@ -206,9 +207,7 @@ void EditorWindow::SplitWindow(WindowSplit split_type)
         }
     }
     else
-    {
         PANIC("This windows cannot be splited and should never ever be focused!");
-    }
 }
 
 // TODO(Cleanup): Summary
@@ -548,6 +547,73 @@ static int HandleEvent(const SDL_Event &event)
                 SwitchWindow(WindowTraverseMode::WIN_TRAVERSE_BACKWARDS);
             }
 
+            // [<-] - Move left current window border.
+            else if (event.key.keysym.sym == 1073741904)
+            {
+                auto curr_window = (globals::windows_arr + globals::current_window_idx);
+                if (curr_window->parent_ptr)
+                {
+                    auto index_in_parent = -1;
+                    for (auto i = 0; i < curr_window->parent_ptr->number_of_windows; ++i)
+                        if (curr_window->parent_ptr->split_windows[i] == curr_window)
+                        {
+                            index_in_parent = i;
+                            break;
+                        }
+                    ASSERT(index_in_parent >= 0);
+
+                    // Cannot be 0, because we move left.
+                    ASSERT(index_in_parent > 0);
+
+                    auto prev_split = (index_in_parent > 1
+                                        ? curr_window->parent_ptr->splits_percentages[index_in_parent - 2]
+                                        : 0.0f);
+
+                    if (curr_window->parent_ptr->splits_percentages[index_in_parent - 1] - prev_split >= MIN_PERCANTAGE_WINDOW_SPLIT)
+                    {
+                        curr_window->parent_ptr->splits_percentages[index_in_parent - 1] -= 0.01f;
+                        curr_window->parent_ptr->UpdateSize(curr_window->parent_ptr->position);
+                        curr_window->parent_ptr->Redraw(false);
+                    }
+                    else
+                        LOG_WARN("Left window is too small!!");
+                }
+            }
+
+            // [->] - Move right current window border.
+            else if (event.key.keysym.sym == 1073741903)
+            {
+                auto curr_window = (globals::windows_arr + globals::current_window_idx);
+                if (curr_window->parent_ptr)
+                {
+                    int index_in_parent = -1;
+                    for (int i = 0; i < curr_window->parent_ptr->number_of_windows; ++i)
+                        if (curr_window->parent_ptr->split_windows[i] == curr_window)
+                        {
+                            index_in_parent = i;
+                            break;
+                        }
+                    ASSERT(index_in_parent >= 0);
+
+                    // Cannot be max, because we move right.
+                    ASSERT(index_in_parent < curr_window->parent_ptr->number_of_windows -1);
+
+                    auto next_split = (index_in_parent < curr_window->parent_ptr->number_of_windows -1
+                                       ? curr_window->parent_ptr->splits_percentages[index_in_parent + 1]
+                                       : 0.0f);
+
+                    if (next_split - curr_window->parent_ptr->splits_percentages[index_in_parent]
+                        >= MIN_PERCANTAGE_WINDOW_SPLIT)
+                    {
+                        curr_window->parent_ptr->splits_percentages[index_in_parent] += 0.01f;
+                        curr_window->parent_ptr->UpdateSize(curr_window->parent_ptr->position);
+                        curr_window->parent_ptr->Redraw(false);
+                    }
+                    else
+                        LOG_WARN("Right window is too small!!");
+                }
+            }
+
             // X - Focus the minibuffer.
             else if (event.key.keysym.sym == 120)
             {
@@ -734,8 +800,8 @@ static int InitWindow(const int width, const int height)
     globals::window = SDL_CreateWindow("Editor",
                                        SDL_WINDOWPOS_UNDEFINED,
                                        SDL_WINDOWPOS_UNDEFINED,
-                                       width, height, 0);
-                                       // 0, 0, 0); // To test corner-cases.
+                                       // width, height, 0);
+                                       0, 0, 0); // To test corner-cases.
 
     if (!globals::window)
     {
