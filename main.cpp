@@ -23,6 +23,7 @@
 #define FAILED(expr_res) (static_cast<int>(expr_res) < 0)
 
 enum WindowSplit { WIN_SPLIT_VERTCAL, WIN_SPLIT_HORIZONTAL };
+enum WindowTraverseMode { WIN_TRAVERSE_FORWARD, WIN_TRAVERSE_BACKWARDS };
 
 struct Rect
 {
@@ -114,8 +115,6 @@ namespace globals
     // TODO(Cleanup): Default value.
     static int window_idx_before_entering_minibuffer;
 }
-
-enum WindowTraverseMode { WIN_TRAVERSE_FORWARD, WIN_TRAVERSE_BACKWARDS };
 
 static EditorBuffer *CreateNewBuffer()
 {
@@ -300,6 +299,108 @@ void EditorWindow::Redraw(bool current_select) const
         {
             split_windows[i]->Redraw(globals::current_window_idx ==
                                      (split_windows[i] - globals::windows_arr));
+        }
+    }
+}
+
+#if 0
+  enum WindowSplit { WIN_SPLIT_VERTCAL, WIN_SPLIT_HORIZONTAL };
+  enum WindowTraverseMode { WIN_TRAVERSE_FORWARD, WIN_TRAVERSE_BACKWARDS };
+#endif
+
+namespace editor_window_utility
+{
+    namespace detail
+    {
+        static void ResizeIthWindowLeft(EditorWindow* parent_window,
+                                        int index_in_parent)
+        {
+            // Cannot be 0, because we move left.
+            ASSERT(index_in_parent > 0);
+
+            auto prev_split = (index_in_parent > 1
+                               ? parent_window->splits_percentages[index_in_parent - 2]
+                               : 0.0f);
+
+            if (parent_window->splits_percentages[index_in_parent - 1]- prev_split
+                >= MIN_PERCANTAGE_WINDOW_SPLIT)
+            {
+                parent_window->splits_percentages[index_in_parent - 1] -= 0.01f;
+                parent_window->UpdateSize(parent_window->position);
+                parent_window->Redraw(false); // Split window, cannot select.
+            }
+            else
+                LOG_WARN("Left window is too small!!");
+        }
+
+        static void ResizeIthWindowRight(EditorWindow* parent_window,
+                                         int index_in_parent)
+        {
+
+            // Cannot be max, because we move right.
+            ASSERT(index_in_parent < parent_window->number_of_windows -1);
+
+            auto next_split = (index_in_parent < parent_window->number_of_windows -1
+                               ? parent_window->splits_percentages[index_in_parent + 1]
+                               : 1.0f);
+
+            if (next_split - parent_window->splits_percentages[index_in_parent]
+                >= MIN_PERCANTAGE_WINDOW_SPLIT)
+            {
+                parent_window->splits_percentages[index_in_parent] += 0.01f;
+                parent_window->UpdateSize(parent_window->position);
+                parent_window->Redraw(false);
+            }
+            else
+                LOG_WARN("Right window is too small!!");
+        }
+    }
+
+    // TODO: Find better name.
+    // [curr_window] is heavily assumed to be the selected window.
+    static void ResizeWindowAux(EditorWindow* curr_window,
+                                WindowSplit split_type,
+                                WindowTraverseMode direction)
+    {
+        // TODO(Cleaup): Explain.
+        auto right_parent = curr_window->parent_ptr;
+        auto child = curr_window;
+        while(right_parent
+              && right_parent->split != split_type
+              // Cannot convert buffer, because we move only on split windows.
+              && !right_parent->contains_buffer)
+        {
+            child = right_parent;
+            right_parent = right_parent->parent_ptr;
+        }
+
+        if(!right_parent)
+        {
+            // TODO(Cleaup): Explain.
+            LOG_WARN("Could not resize, because right border was not found");
+            return;
+        }
+        ASSERT(!right_parent->contains_buffer);
+
+        auto index_in_parent = -1;
+        for (auto i = 0; i < right_parent->number_of_windows; ++i)
+            if (right_parent->split_windows[i] == child)
+            {
+                index_in_parent = i;
+                break;
+            }
+        ASSERT(index_in_parent >= 0);
+
+        switch(direction)
+        {
+            case (WindowTraverseMode::WIN_TRAVERSE_BACKWARDS):
+                detail::ResizeIthWindowLeft(right_parent, index_in_parent);
+                break;
+            case (WindowTraverseMode::WIN_TRAVERSE_FORWARD):
+                detail::ResizeIthWindowRight(right_parent, index_in_parent);
+                break;
+            default:
+                UNREACHABLE();
         }
     }
 }
@@ -551,68 +652,38 @@ static int HandleEvent(const SDL_Event &event)
             else if (event.key.keysym.sym == 1073741904)
             {
                 auto curr_window = (globals::windows_arr + globals::current_window_idx);
-                if (curr_window->parent_ptr)
-                {
-                    auto index_in_parent = -1;
-                    for (auto i = 0; i < curr_window->parent_ptr->number_of_windows; ++i)
-                        if (curr_window->parent_ptr->split_windows[i] == curr_window)
-                        {
-                            index_in_parent = i;
-                            break;
-                        }
-                    ASSERT(index_in_parent >= 0);
-
-                    // Cannot be 0, because we move left.
-                    ASSERT(index_in_parent > 0);
-
-                    auto prev_split = (index_in_parent > 1
-                                        ? curr_window->parent_ptr->splits_percentages[index_in_parent - 2]
-                                        : 0.0f);
-
-                    if (curr_window->parent_ptr->splits_percentages[index_in_parent - 1] - prev_split >= MIN_PERCANTAGE_WINDOW_SPLIT)
-                    {
-                        curr_window->parent_ptr->splits_percentages[index_in_parent - 1] -= 0.01f;
-                        curr_window->parent_ptr->UpdateSize(curr_window->parent_ptr->position);
-                        curr_window->parent_ptr->Redraw(false);
-                    }
-                    else
-                        LOG_WARN("Left window is too small!!");
-                }
+                editor_window_utility::ResizeWindowAux(curr_window,
+                                                       WindowSplit::WIN_SPLIT_HORIZONTAL,
+                                                       WindowTraverseMode::WIN_TRAVERSE_BACKWARDS);
             }
 
             // [->] - Move right current window border.
             else if (event.key.keysym.sym == 1073741903)
             {
                 auto curr_window = (globals::windows_arr + globals::current_window_idx);
-                if (curr_window->parent_ptr)
-                {
-                    int index_in_parent = -1;
-                    for (int i = 0; i < curr_window->parent_ptr->number_of_windows; ++i)
-                        if (curr_window->parent_ptr->split_windows[i] == curr_window)
-                        {
-                            index_in_parent = i;
-                            break;
-                        }
-                    ASSERT(index_in_parent >= 0);
-
-                    // Cannot be max, because we move right.
-                    ASSERT(index_in_parent < curr_window->parent_ptr->number_of_windows -1);
-
-                    auto next_split = (index_in_parent < curr_window->parent_ptr->number_of_windows -1
-                                       ? curr_window->parent_ptr->splits_percentages[index_in_parent + 1]
-                                       : 0.0f);
-
-                    if (next_split - curr_window->parent_ptr->splits_percentages[index_in_parent]
-                        >= MIN_PERCANTAGE_WINDOW_SPLIT)
-                    {
-                        curr_window->parent_ptr->splits_percentages[index_in_parent] += 0.01f;
-                        curr_window->parent_ptr->UpdateSize(curr_window->parent_ptr->position);
-                        curr_window->parent_ptr->Redraw(false);
-                    }
-                    else
-                        LOG_WARN("Right window is too small!!");
-                }
+                editor_window_utility::ResizeWindowAux(curr_window,
+                                                       WindowSplit::WIN_SPLIT_HORIZONTAL,
+                                                       WindowTraverseMode::WIN_TRAVERSE_FORWARD);
             }
+
+            //
+            else if (event.key.keysym.sym == 1073741905)
+            {
+                auto curr_window = (globals::windows_arr + globals::current_window_idx);
+                editor_window_utility::ResizeWindowAux(curr_window,
+                                                       WindowSplit::WIN_SPLIT_VERTCAL,
+                                                       WindowTraverseMode::WIN_TRAVERSE_FORWARD);
+            }
+
+            //
+            else if (event.key.keysym.sym == 1073741906)
+            {
+                auto curr_window = (globals::windows_arr + globals::current_window_idx);
+                editor_window_utility::ResizeWindowAux(curr_window,
+                                                       WindowSplit::WIN_SPLIT_VERTCAL,
+                                                       WindowTraverseMode::WIN_TRAVERSE_BACKWARDS);
+            }
+
 
             // X - Focus the minibuffer.
             else if (event.key.keysym.sym == 120)
@@ -800,8 +871,8 @@ static int InitWindow(const int width, const int height)
     globals::window = SDL_CreateWindow("Editor",
                                        SDL_WINDOWPOS_UNDEFINED,
                                        SDL_WINDOWPOS_UNDEFINED,
-                                       // width, height, 0);
-                                       0, 0, 0); // To test corner-cases.
+                                       width, height, 0);
+                                       // 0, 0, 0); // To test corner-cases.
 
     if (!globals::window)
     {
