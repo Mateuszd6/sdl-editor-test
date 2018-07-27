@@ -116,6 +116,14 @@ namespace globals
     static int window_idx_before_entering_minibuffer;
 }
 
+// TODO(Splitting lines): Remove unused atrribute!
+// __attribute__ ((unused))
+static void DrawSplittingLine(const Rect &rect)
+{
+    SDL_Rect split_line = SDL_Rect { rect.x, rect.y, rect.width, rect.height };
+    SDL_FillRect(globals::screen, &split_line, 0x000000); // 0x64645e
+}
+
 static EditorBuffer *CreateNewBuffer()
 {
     globals::buffers[globals::number_of_buffers++] = { .color = WINDOW_COLOR };
@@ -261,13 +269,19 @@ void EditorWindow::UpdateSize(Rect new_rect)
                  : Rect { position.x, previous_split,
                           position.width, split_idx[i]-previous_split });
 
-#if 0
+#if 1
             // TODO(Profiling): Move outside the loop for better performace?
             if (i < number_of_windows - 1)
             {
                 Rect splitting_rect = (split == WindowSplit::WIN_SPLIT_HORIZONTAL
-                                       ? Rect { split_idx[i], rect.y, 1, rect.height }
-                                       : Rect { rect.x, split_idx[i], rect.width, 1 });
+                                       ? Rect {
+                                           split_idx[i], nested_window_rect.y,
+                                           1, nested_window_rect.height
+                                       }
+                                       : Rect {
+                                           nested_window_rect.x, split_idx[i],
+                                           nested_window_rect.width, 1
+                                       });
 
                 DrawSplittingLine(splitting_rect);
             }
@@ -294,19 +308,12 @@ void EditorWindow::Redraw(bool current_select) const
                      current_select ? 0xddee22 : buffer_ptr->color);
     }
     else
-    {
         for (int i = 0; i < number_of_windows; ++i)
         {
             split_windows[i]->Redraw(globals::current_window_idx ==
                                      (split_windows[i] - globals::windows_arr));
         }
-    }
 }
-
-#if 0
-  enum WindowSplit { WIN_SPLIT_VERTCAL, WIN_SPLIT_HORIZONTAL };
-  enum WindowTraverseMode { WIN_TRAVERSE_FORWARD, WIN_TRAVERSE_BACKWARDS };
-#endif
 
 namespace editor_window_utility
 {
@@ -316,7 +323,11 @@ namespace editor_window_utility
                                         int index_in_parent)
         {
             // Cannot be 0, because we move left.
-            ASSERT(index_in_parent > 0);
+            if(index_in_parent == 0)
+            {
+                LOG_WARN("Cannot move left.");
+                return;
+            }
 
             auto prev_split = (index_in_parent > 1
                                ? parent_window->splits_percentages[index_in_parent - 2]
@@ -338,7 +349,11 @@ namespace editor_window_utility
         {
 
             // Cannot be max, because we move right.
-            ASSERT(index_in_parent < parent_window->number_of_windows -1);
+            if (index_in_parent == parent_window->number_of_windows -1)
+            {
+                LOG_WARN("Cannot move right.");
+                return;
+            }
 
             auto next_split = (index_in_parent < parent_window->number_of_windows -1
                                ? parent_window->splits_percentages[index_in_parent + 1]
@@ -409,7 +424,8 @@ namespace editor_window_utility
 static void InitializeFirstWindow()
 {
     globals::number_of_buffers = 2;
-    globals::buffers[0] = { .color = 0xffffff }; // Buffer with index 0 is a minibufer.
+    globals::buffers[0] = { .color = 0xffffff }; // Buffer with index 0 is a
+                                                 // minibufer.
     globals::buffers[1] = { .color = WINDOW_COLOR };
 
     globals::number_of_windows = 2;
@@ -433,17 +449,10 @@ static void InitializeFirstWindow()
     globals::current_window_idx = 1;
 }
 
-// TODO(Splitting lines): Remove unused atrribute!
-__attribute__ ((unused))
-static void DrawSplittingLine(const Rect &rect)
-{
-    SDL_Rect split_line = SDL_Rect { rect.x, rect.y, rect.width, rect.height };
-    SDL_FillRect(globals::screen, &split_line, 0x64645e);
-}
-
 // TODO(Cleanup): Create namespace application and move resize and redraw window
 // functions and all globals there!
-// TODO(Cleanup): Check if something here can fail, if not change the type to void.
+// TODO(Cleanup): Check if something here can fail, if not change the type to
+// void.
 static int ResizeWindow()
 {
     globals::windows_arr[0].UpdateSize(Rect {
@@ -456,7 +465,8 @@ static int ResizeWindow()
     return 0;
 }
 
-// TODO(Cleanup): Check if something here can fail, if not change the type to void.
+// TODO(Cleanup): Check if something here can fail, if not change the type to
+// void.
 static int RedrawWindow()
 {
     globals::screen = SDL_GetWindowSurface(globals::window);
@@ -465,21 +475,29 @@ static int RedrawWindow()
 
     SDL_GetWindowSize(globals::window, &globals::window_w, &globals::window_h);
 
-    // This is probobly obsolete and should be removed. THis bug was fixed long time ago.
-    // This used to happen when too many windows were created due to the stack smashing.
+    // This is probobly obsolete and should be removed. THis bug was fixed long
+    // time ago.  This used to happen when too many windows were created due to
+    // the stack smashing.
     if (globals::window_w == 0 || globals::window_h == 0)
         PANIC("Size is 0!");
 
+#if 0
     // Fill the whole screen, just in case.
-    const SDL_Rect whole_screen = { 0, 0, globals::window_w, globals::window_h };
-    SDL_FillRect(globals::screen, &whole_screen, 0xff00ff); // Color suggesting error.
+    const SDL_Rect whole_screen = {
+        0, 0,
+        globals::window_w, globals::window_h
+    };
+
+    // Color suggesting error.
+    SDL_FillRect(globals::screen, &whole_screen, 0xff00ff);
+#endif
 
     ASSERT(globals::number_of_windows > 0);
     const EditorWindow main_window = globals::windows_arr[1];
     const EditorWindow mini_buffer_window = globals::windows_arr[0];
 
     // TODO(Splitting lines): Decide how i want to draw them.
-#if 0
+#if 1
     DrawSplittingLine({ 0, globals::window_h - 17, globals::window_w, 1 });
 #endif
 
@@ -493,8 +511,8 @@ static int RedrawWindow()
 // If traverse is forward, we pick the first window in the subtree of the
 // root_window, otherwise we pick the last one (we always go either left or
 // right recusively).
-static EditorWindow *GetFirstOrLastWindowInSubtree(EditorWindow *const root_window,
-                                                   const WindowTraverseMode traverse)
+static EditorWindow *GetFirstOrLastWindowInSubtree(EditorWindow* root_window,
+                                                   WindowTraverseMode traverse)
 {
     // If root window is a bufer, it is just selected.
     if (root_window->contains_buffer)
@@ -652,36 +670,40 @@ static int HandleEvent(const SDL_Event &event)
             else if (event.key.keysym.sym == 1073741904)
             {
                 auto curr_window = (globals::windows_arr + globals::current_window_idx);
-                editor_window_utility::ResizeWindowAux(curr_window,
-                                                       WindowSplit::WIN_SPLIT_HORIZONTAL,
-                                                       WindowTraverseMode::WIN_TRAVERSE_BACKWARDS);
+                editor_window_utility
+                    ::ResizeWindowAux(curr_window,
+                                      WindowSplit::WIN_SPLIT_HORIZONTAL,
+                                      WindowTraverseMode::WIN_TRAVERSE_BACKWARDS);
             }
 
             // [->] - Move right current window border.
             else if (event.key.keysym.sym == 1073741903)
             {
                 auto curr_window = (globals::windows_arr + globals::current_window_idx);
-                editor_window_utility::ResizeWindowAux(curr_window,
-                                                       WindowSplit::WIN_SPLIT_HORIZONTAL,
-                                                       WindowTraverseMode::WIN_TRAVERSE_FORWARD);
+                editor_window_utility
+                    ::ResizeWindowAux(curr_window,
+                                      WindowSplit::WIN_SPLIT_HORIZONTAL,
+                                      WindowTraverseMode::WIN_TRAVERSE_FORWARD);
             }
 
-            //
+            // [v] - Move down current window border.
             else if (event.key.keysym.sym == 1073741905)
             {
                 auto curr_window = (globals::windows_arr + globals::current_window_idx);
-                editor_window_utility::ResizeWindowAux(curr_window,
-                                                       WindowSplit::WIN_SPLIT_VERTCAL,
-                                                       WindowTraverseMode::WIN_TRAVERSE_FORWARD);
+                editor_window_utility
+                    ::ResizeWindowAux(curr_window,
+                                      WindowSplit::WIN_SPLIT_VERTCAL,
+                                      WindowTraverseMode::WIN_TRAVERSE_FORWARD);
             }
 
-            //
+            // [^] - Move up current window border.
             else if (event.key.keysym.sym == 1073741906)
             {
                 auto curr_window = (globals::windows_arr + globals::current_window_idx);
-                editor_window_utility::ResizeWindowAux(curr_window,
-                                                       WindowSplit::WIN_SPLIT_VERTCAL,
-                                                       WindowTraverseMode::WIN_TRAVERSE_BACKWARDS);
+                editor_window_utility
+                    ::ResizeWindowAux(curr_window,
+                                      WindowSplit::WIN_SPLIT_VERTCAL,
+                                      WindowTraverseMode::WIN_TRAVERSE_BACKWARDS);
             }
 
 
@@ -718,16 +740,55 @@ static int HandleEvent(const SDL_Event &event)
                         SplitWindow(WindowSplit::WIN_SPLIT_VERTCAL);
                 }
                 else
-                {
                     LOG_WARN("Cannot split minibuffer");
+            }
+
+            // D - Delete window.
+            else if (event.key.keysym.sym == 100)
+            {
+                auto curr_win = globals::windows_arr + globals::current_window_idx;
+                if (curr_win->parent_ptr)
+                {
+                    int idx_in_parent = -1;
+                    for (int i = 0; i < curr_win->parent_ptr->number_of_windows; ++i)
+                        if (curr_win->parent_ptr->split_windows[i] == curr_win)
+                        {
+                            idx_in_parent = i;
+                            break;
+                        }
+                    ASSERT(idx_in_parent >= 0);
+
+                    if (idx_in_parent == 0)
+                        PANIC("Not supported yet!");
+                    else
+                    {
+                        curr_win->parent_ptr->splits_percentages[idx_in_parent - 1] =
+                            curr_win->parent_ptr->splits_percentages[idx_in_parent];
+
+                        for (int i = idx_in_parent;
+                             i < curr_win->parent_ptr->number_of_windows;
+                             ++i)
+                        {
+                            curr_win->parent_ptr->splits_percentages[i] =
+                                curr_win->parent_ptr->splits_percentages[i + 1];
+
+                            curr_win->parent_ptr->split_windows[i] =
+                                curr_win->parent_ptr->split_windows[i + 1];
+                        }
+
+                        curr_win->parent_ptr->number_of_windows--;
+                    }
                 }
+                else
+                    LOG_WARN("Cannot delete this window.");
             }
 
             if (globals::windows_arr[globals::current_window_idx].contains_buffer)
             {
                 LOG_INFO("Current window: %d (with color: %x)",
                          globals::current_window_idx,
-                         globals::windows_arr[globals::current_window_idx].buffer_ptr->color);
+                         globals::windows_arr[globals::current_window_idx]
+                             .buffer_ptr->color);
             }
 #else
             LOG_INFO("MSG ---> KEY DOWN %d", event.key.keysym.sym);
@@ -769,33 +830,39 @@ static int HandleEvent(const SDL_Event &event)
                 case SDL_WINDOWEVENT_RESIZED:
                 case SDL_WINDOWEVENT_SIZE_CHANGED:
                 {
-                    LOG_INFO("MSG ---> Window %d resized", event.window.windowID);
+                    LOG_INFO("MSG ---> Window %d resized",
+                             event.window.windowID);
                     ResizeWindow();
                 } break;
 
                 case SDL_WINDOWEVENT_MINIMIZED:
                 {
-                    LOG_INFO("MSG ---> Window %d minimized", event.window.windowID);
+                    LOG_INFO("MSG ---> Window %d minimized",
+                             event.window.windowID);
                 } break;
 
                 case SDL_WINDOWEVENT_MAXIMIZED:
                 {
-                    LOG_INFO("MSG ---> Window %d maximized", event.window.windowID);
+                    LOG_INFO("MSG ---> Window %d maximized",
+                             event.window.windowID);
                 } break;
 
                 case SDL_WINDOWEVENT_RESTORED:
                 {
-                    LOG_INFO("MSG ---> Window %d restored", event.window.windowID);
+                    LOG_INFO("MSG ---> Window %d restored",
+                             event.window.windowID);
                 } break;
 
                 case SDL_WINDOWEVENT_ENTER:
                 {
-                    LOG_INFO("MSG ---> Mouse entered window %d", event.window.windowID);
+                    LOG_INFO("MSG ---> Mouse entered window %d",
+                             event.window.windowID);
                 } break;
 
                 case SDL_WINDOWEVENT_LEAVE:
                 {
-                    LOG_INFO("MSG ---> Mouse left window %d", event.window.windowID);
+                    LOG_INFO("MSG ---> Mouse left window %d",
+                             event.window.windowID);
                 } break;
 
                 case SDL_WINDOWEVENT_FOCUS_GAINED:
@@ -812,7 +879,8 @@ static int HandleEvent(const SDL_Event &event)
 
                 case SDL_WINDOWEVENT_CLOSE:
                 {
-                    LOG_INFO("MSG ---> Window %d closed", event.window.windowID);
+                    LOG_INFO("MSG ---> Window %d closed",
+                             event.window.windowID);
                 } break;
 
 #if SDL_VERSION_ATLEAST(2, 0, 5)
@@ -922,7 +990,9 @@ static void DEBUG_PrintWindowsState(const EditorWindow *window)
         printf(" (Buffer: %ld) ", window->buffer_ptr - globals::buffers);
     else
     {
-        printf(" (%c){ ", window->split == WindowSplit::WIN_SPLIT_HORIZONTAL ? 'H' : 'V');
+        printf(" (%c){ ", (window->split == WindowSplit::WIN_SPLIT_HORIZONTAL
+                           ? 'H'
+                           : 'V'));
         for(int i = 0; i < window->number_of_windows; ++i)
             DEBUG_PrintWindowsState(window->split_windows[i]);
         printf("} ");
@@ -956,7 +1026,8 @@ int main(void)
     int window_x = current.w / 2 - globals::window_w / 2,
         window_y = current.h / 2 - globals::window_h / 2;
 
-    // TODO(Platform): Use values based on screen width/height, or let user set his own.
+    // TODO(Platform): Use values based on screen width/height, or let user set
+    // his own.
     if (FAILED(InitWindow(globals::window_w, globals::window_h)))
     {
         // TODO(Debug): Logging.
@@ -975,27 +1046,29 @@ int main(void)
 #endif
 
     TTF_Font *font_test =
-        TTF_OpenFont("/usr/share/fonts/TTF/DejaVuSansMono.ttf", globals::font_size);
+        TTF_OpenFont("/usr/share/fonts/TTF/DejaVuSansMono.ttf",
+                     globals::font_size);
 
-    if (!(globals::text_surface[0] = TTF_RenderText_Solid(font_test,
-                                                 "This text is: Solid",
-                                                 (SDL_Color){0xF8, 0xF8, 0xF8, 255}))
-
-        || !(globals::text_surface[1] = TTF_RenderText_Shaded(font_test,
-                                                     "This text is: Shaded",
-                                                     (SDL_Color){0xF8, 0xF8, 0xF8, 255},
-                                                     (SDL_Color){0x15, 0x15, 0x80, 0xFF}))
-
-        || !(globals::text_surface[2] = TTF_RenderText_Blended(font_test,
-                                                      "Compilation started at Fri Jun",
-                                                      (SDL_Color){0xF8, 0xF8, 0xF8, 255}))
-
-        || !(globals::text_surface[3] = TTF_RenderText_Blended(font_test,
-                                                      "#define",
-                                                      (SDL_Color){0xF9, 0x26, 0x72, 255})))
+    if (!(globals::text_surface[0] =
+          TTF_RenderText_Solid(font_test,
+                               "This text is: Solid",
+                               (SDL_Color){0xF8, 0xF8, 0xF8, 255}))
+        || !(globals::text_surface[1] =
+             TTF_RenderText_Shaded(font_test,
+                                   "This text is: Shaded",
+                                   (SDL_Color){0xF8, 0xF8, 0xF8, 255},
+                                   (SDL_Color){0x15, 0x15, 0x80, 0xFF}))
+        || !(globals::text_surface[2] =
+             TTF_RenderText_Blended(font_test,
+                                    "Compilation started at Fri Jun",
+                                    (SDL_Color){0xF8, 0xF8, 0xF8, 255}))
+        || !(globals::text_surface[3] =
+             TTF_RenderText_Blended(font_test,
+                                    "#define",
+                                    (SDL_Color){0xF9, 0x26, 0x72, 255})))
     {
         // TODO(Debug): handle error here, perhaps print TTF_GetError at least.
-        ASSERT(false);
+        PANIC("SDL_TTF internal error. Game Over ;(");
     }
 
     TTF_CloseFont(font_test);
