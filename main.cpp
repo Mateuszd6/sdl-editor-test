@@ -1,13 +1,33 @@
 #include <stdio.h>
+#include <cstdint>
 
-#include <SDL.h>
-#include <SDL_ttf.h>
+// TODO(Cleanup): Move to other config file!
+#define SUCCEEDED(expr_res) (static_cast<int>(expr_res) >= 0)
+#define FAILED(expr_res) (static_cast<int>(expr_res) < 0)
+#define IS_NULL(expr_res) ((expr_res) == nullptr)
+
+// TODO(Cleanup): Change/refactor or just add summary.
+#define IS_EARLIER_IN_ARR(ARR, FIRST, SECOND) (FIRST - ARR < SECOND - ARR)
 
 #define DEBUG
 #define LOGGING
 #define DG_LOG_LVL DG_LOG_LVL_WARN // DG_LOG_LVL_ALL
 #define DG_USE_COLORS 1
 #include "debug_goodies.h"
+
+typedef int8_t int8;
+typedef int16_t int16;
+typedef int32_t int32;
+typedef int64_t int64;
+typedef uint8_t uint8;
+typedef uint16_t uint16;
+typedef uint32_t uint32;
+typedef uint64_t uint64;
+
+#include <SDL.h>
+#include <SDL_ttf.h>
+
+#include "gap_buffer.cpp"
 
 // #define RANDOM_WINDOW_COLORS
 #ifdef RANDOM_WINDOW_COLORS
@@ -17,11 +37,6 @@
 #else
   #define WINDOW_COLOR (0x101010)
 #endif
-
-// TODO(Cleanup): Move to other config file!
-#define SUCCEEDED(expr_res) (static_cast<int>(expr_res) >= 0)
-#define FAILED(expr_res) (static_cast<int>(expr_res) < 0)
-#define IS_NULL(expr_res) ((expr_res) == nullptr)
 
 enum WindowSplit { WIN_SPLIT_VERTCAL, WIN_SPLIT_HORIZONTAL };
 enum WindowTraverseMode { WIN_TRAVERSE_FORWARD, WIN_TRAVERSE_BACKWARDS };
@@ -37,6 +52,8 @@ struct Rect
 struct EditorBuffer
 {
     int color;
+
+    gap_buffer one_line_buffer;
 };
 
 #define MAX_WINDOWS_ON_SPLIT (10)
@@ -131,8 +148,12 @@ static void DrawSplittingLine(const Rect &rect)
 
 static EditorBuffer *CreateNewBuffer()
 {
-    global::buffers[global::number_of_buffers++] = { .color = WINDOW_COLOR };
-    return global::buffers + global::number_of_buffers - 1;
+    global::buffers[global::number_of_buffers].color = WINDOW_COLOR;
+    global::buffers[global::number_of_buffers].one_line_buffer.initialize();
+
+    auto result = global::buffers + global::number_of_buffers;
+    global::number_of_buffers++;
+    return result;
 }
 
 static EditorWindow *CreateNewWindowWithBuffer(EditorBuffer *buffer,
@@ -594,9 +615,9 @@ static void InitTextGlobalSutff()
     font_test = nullptr;
 }
 
-static void PrintTextLine(const EditorWindow* window_ptr,
+static void PrintTextLine(EditorWindow const* window_ptr,
                           int line_nr, // First visible line of the buffer is 0.
-                          const char* text)
+                          char const* text) // gap_buffer const* line
 {
     for (auto i = 0; text[i]; ++i)
     {
@@ -623,6 +644,15 @@ static void PrintTextLine(const EditorWindow* window_ptr,
             PANIC("Bitting surface failed!");
         }
     }
+}
+
+static void PrintTextLineFromGapBuffer(EditorWindow const* window_ptr,
+                                       int line_nr, // First visible line of the buffer is 0.
+                                       gap_buffer const* line)
+{
+    auto text = line->to_c_str();
+    PrintTextLine(window_ptr, line_nr, reinterpret_cast<char const*>(text));
+    std::free((void *)text);
 }
 
 // TODO(Cleanup): Check if something here can fail, if not change the type to
@@ -658,10 +688,12 @@ static int RedrawWindow()
     if (!(global::windows_arr + 1)->contains_buffer)
     {
         if ((global::windows_arr + 2)->contains_buffer
-            && (global::windows_arr + 3)->contains_buffer)
+            && (global::windows_arr + 4)->contains_buffer
+            && (global::windows_arr + 5)->contains_buffer)
         {
             auto left_w = global::windows_arr + 2;
-            auto right_w = global::windows_arr + 3;
+            auto right_w = global::windows_arr + 4;
+            auto gap_w = global::windows_arr + 5;
 
             PrintTextLine(left_w, 0, "#include <iostream>");
             PrintTextLine(left_w, 2, "int main()");
@@ -678,6 +710,8 @@ static int RedrawWindow()
             PrintTextLine(right_w, 4, "    <p>Example paragraph</p>");
             PrintTextLine(right_w, 5, "  </body>");
             PrintTextLine(right_w, 6, "</html>");
+
+            PrintTextLineFromGapBuffer(gap_w, 0, &gap_w->buffer_ptr->one_line_buffer);
         }
     }
 
@@ -820,7 +854,7 @@ static int HandleEvent(const SDL_Event &event)
 
         case SDL_KEYDOWN:
         {
-#if 1
+#if 0
             // W - Switch window.
             if (event.key.keysym.sym == 119)
             {
@@ -947,10 +981,159 @@ static int HandleEvent(const SDL_Event &event)
                 LOG_INFO("Current window: %d (with color: %x)",
                          global::current_window_idx,
                          global::windows_arr[global::current_window_idx]
-                             .buffer_ptr->color);
+                         .buffer_ptr->color);
             }
-#else
+#elif 0
             LOG_INFO("MSG ---> KEY DOWN %d", event.key.keysym.sym);
+#else
+            auto character = '\0';
+            auto arrow = 0;
+
+            switch (event.key.keysym.sym)
+            {
+
+                case SDLK_a:
+                    character = (event.key.keysym.mod & KMOD_SHIFT) ? 'A' : 'a';
+                    break;
+                case SDLK_b:
+                    character = (event.key.keysym.mod & KMOD_SHIFT) ? 'B' : 'b';
+                    break;
+                case SDLK_c:
+                    character = (event.key.keysym.mod & KMOD_SHIFT) ? 'C' : 'c';
+                    break;
+                case SDLK_d:
+                    character = (event.key.keysym.mod & KMOD_SHIFT) ? 'D' : 'd';
+                    break;
+                case SDLK_e:
+                    character = (event.key.keysym.mod & KMOD_SHIFT) ? 'E' : 'e';
+                    break;
+                case SDLK_f:
+                    character = (event.key.keysym.mod & KMOD_SHIFT) ? 'F' : 'f';
+                    break;
+                case SDLK_g:
+                    character = (event.key.keysym.mod & KMOD_SHIFT) ? 'G' : 'g';
+                    break;
+                case SDLK_h:
+                    character = (event.key.keysym.mod & KMOD_SHIFT) ? 'H' : 'h';
+                    break;
+                case SDLK_i:
+                    character = (event.key.keysym.mod & KMOD_SHIFT) ? 'I' : 'i';
+                    break;
+                case SDLK_j:
+                    character = (event.key.keysym.mod & KMOD_SHIFT) ? 'J' : 'j';
+                    break;
+                case SDLK_k:
+                    character = (event.key.keysym.mod & KMOD_SHIFT) ? 'K' : 'k';
+                    break;
+                case SDLK_l:
+                    character = (event.key.keysym.mod & KMOD_SHIFT) ? 'L' : 'l';
+                    break;
+                case SDLK_m:
+                    character = (event.key.keysym.mod & KMOD_SHIFT) ? 'M' : 'm';
+                    break;
+                case SDLK_n:
+                    character = (event.key.keysym.mod & KMOD_SHIFT) ? 'N' : 'n';
+                    break;
+                case SDLK_o:
+                    character = (event.key.keysym.mod & KMOD_SHIFT) ? 'O' : 'o';
+                    break;
+                case SDLK_p:
+                    character = (event.key.keysym.mod & KMOD_SHIFT) ? 'P' : 'p';
+                    break;
+                case SDLK_q:
+                    character = (event.key.keysym.mod & KMOD_SHIFT) ? 'Q' : 'q';
+                    break;
+                case SDLK_r:
+                    character = (event.key.keysym.mod & KMOD_SHIFT) ? 'R' : 'r';
+                    break;
+                case SDLK_s:
+                    character = (event.key.keysym.mod & KMOD_SHIFT) ? 'S' : 's';
+                    break;
+                case SDLK_t:
+                    character = (event.key.keysym.mod & KMOD_SHIFT) ? 'T' : 't';
+                    break;
+                case SDLK_u:
+                    character = (event.key.keysym.mod & KMOD_SHIFT) ? 'U' : 'u';
+                    break;
+                case SDLK_v:
+                    character = (event.key.keysym.mod & KMOD_SHIFT) ? 'V' : 'v';
+                    break;
+                case SDLK_w:
+                    character = (event.key.keysym.mod & KMOD_SHIFT) ? 'W' : 'w';
+                    break;
+                case SDLK_x:
+                    character = (event.key.keysym.mod & KMOD_SHIFT) ? 'X' : 'x';
+                    break;
+                case SDLK_y:
+                    character = (event.key.keysym.mod & KMOD_SHIFT) ? 'Y' : 'y';
+                    break;
+                case SDLK_z:
+                    character = (event.key.keysym.mod & KMOD_SHIFT) ? 'Z' : 'z';
+                    break;
+                case SDLK_0:
+                    character = '0';
+                    break;
+                case SDLK_1:
+                    character = '1';
+                    break;
+                case SDLK_2:
+                    character = '2';
+                    break;
+                case SDLK_3:
+                    character = '3';
+                    break;
+                case SDLK_4:
+                    character = '4';
+                    break;
+                case SDLK_5:
+                    character = '5';
+                    break;
+                case SDLK_6:
+                    character = '6';
+                    break;
+                case SDLK_7:
+                    character = '7';
+                    break;
+                case SDLK_8:
+                    character = '8';
+                    break;
+                case SDLK_9:
+                    character = '9';
+                    break;
+                case SDLK_SPACE:
+                    character = ' ';
+                    break;
+
+                case SDLK_RIGHT:
+                    arrow = 1;
+                    break;
+
+                case SDLK_LEFT:
+                    arrow = 2;
+                    break;
+
+                case SDLK_UP:
+                    arrow = 3;
+                    break;
+
+                case SDLK_DOWN:
+                    arrow = 4;
+                    break;
+
+                default:
+                    break;
+            }
+
+            if (character != '\0')
+            {
+                LOG_WARN("Character pressed: %c", character);
+                (global::windows_arr + 5)->buffer_ptr->one_line_buffer.insert_at_point(character);
+            }
+
+            if (arrow == 1)
+                (global::windows_arr + 5)->buffer_ptr->one_line_buffer.cursor_forward();
+            else if (arrow == 2)
+                (global::windows_arr + 5)->buffer_ptr->one_line_buffer.cursor_backwards();
 #endif
         } break;
 
@@ -1100,8 +1283,8 @@ static int InitWindow(const int width, const int height)
     global::window = SDL_CreateWindow("Editor",
                                       SDL_WINDOWPOS_UNDEFINED,
                                       SDL_WINDOWPOS_UNDEFINED,
-                                      // width, height, 0);
-                                      0, 0, 0); // To test corner-cases.
+                                      width, height, 0);
+                                      // 0, 0, 0); // To test corner-cases.
 
     if (!global::window)
     {
@@ -1151,9 +1334,7 @@ static void DEBUG_PrintWindowsState(const EditorWindow *window)
         printf(" (Buffer: %ld) ", window->buffer_ptr - global::buffers);
     else
     {
-        printf(" (%c){ ", (window->split == WindowSplit::WIN_SPLIT_HORIZONTAL
-                           ? 'H'
-                           : 'V'));
+        printf(" (%c){ ", (window->split == WindowSplit::WIN_SPLIT_HORIZONTAL ? 'H' : 'V'));
         for(auto i = 0; i < window->number_of_windows; ++i)
             DEBUG_PrintWindowsState(window->split_windows[i]);
         printf("} ");
@@ -1196,6 +1377,16 @@ int main(void)
     SDL_SetWindowPosition(global::window, window_x, window_y);
 
     InitializeFirstWindow();
+
+#if 1
+    global::windows_arr[global::current_window_idx]
+        .SplitWindow(WindowSplit::WIN_SPLIT_HORIZONTAL);
+    SwitchWindow(WindowTraverseMode::WIN_TRAVERSE_FORWARD);
+    global::windows_arr[global::current_window_idx]
+        .SplitWindow(WindowSplit::WIN_SPLIT_VERTCAL);
+    SwitchWindow(WindowTraverseMode::WIN_TRAVERSE_FORWARD);
+#endif
+
     InitTextGlobalSutff();
 
     for (;;)
