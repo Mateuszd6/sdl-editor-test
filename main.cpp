@@ -664,10 +664,16 @@ static void PrintTextLineFromGapBuffer(EditorWindow const* window_ptr,
                                        gap_buffer const* line)
 {
     auto text = line->to_c_str();
-    auto idx = line->curr_point - line->buffer;
+    auto idx = line->get_idx();
+
     PrintTextLine(window_ptr, line_nr, reinterpret_cast<char const*>(text), idx);
 
-    std::free((void *)text);
+#if 0
+    system("clear");
+    printf("IDX: %d\n", idx);
+    line->DEBUG_print_state();
+#endif
+    std::free(reinterpret_cast<void *>(const_cast<unsigned char*>(text)));
 }
 
 // TODO(Cleanup): Check if something here can fail, if not change the type to
@@ -1003,6 +1009,8 @@ static int HandleEvent(const SDL_Event &event)
 #else
             auto character = '\0';
             auto arrow = 0;
+            auto backspace = false;
+            auto del = false;
 
             switch (event.key.keysym.sym)
             {
@@ -1119,18 +1127,22 @@ static int HandleEvent(const SDL_Event &event)
                     character = ' ';
                     break;
 
+                case SDLK_BACKSPACE:
+                    backspace = true;
+                    break;
+                case SDLK_DELETE:
+                    del = true;
+                    break;
+
                 case SDLK_RIGHT:
                     arrow = 1;
                     break;
-
                 case SDLK_LEFT:
                     arrow = 2;
                     break;
-
                 case SDLK_UP:
                     arrow = 3;
                     break;
-
                 case SDLK_DOWN:
                     arrow = 4;
                     break;
@@ -1139,16 +1151,30 @@ static int HandleEvent(const SDL_Event &event)
                     break;
             }
 
+            auto succeeded = false;
             if (character != '\0')
             {
-                LOG_WARN("Character pressed: %c", character);
-                (global::windows_arr + 5)->buffer_ptr->one_line_buffer.insert_at_point(character);
+                (global::windows_arr + 5)->buffer_ptr
+                                         ->one_line_buffer.insert_at_point(character);
+                succeeded = true; // Inserting character cannot fail.
             }
-
-            if (arrow == 1)
-                (global::windows_arr + 5)->buffer_ptr->one_line_buffer.cursor_forward();
+            else if (arrow == 1)
+                succeeded = (global::windows_arr + 5)->buffer_ptr
+                                                     ->one_line_buffer.cursor_forward();
             else if (arrow == 2)
-                (global::windows_arr + 5)->buffer_ptr->one_line_buffer.cursor_backwards();
+                succeeded = (global::windows_arr + 5)->buffer_ptr
+                                                     ->one_line_buffer.cursor_backward();
+            else if (backspace)
+                succeeded = (global::windows_arr + 5)->buffer_ptr
+                                                     ->one_line_buffer.delete_char_backward();
+            else if (del)
+                succeeded = (global::windows_arr + 5)->buffer_ptr
+                                                     ->one_line_buffer.delete_char_forward();
+
+            if (!succeeded)
+            {
+                LOG_WARN("Could not make the operation!");
+            }
 #endif
         } break;
 

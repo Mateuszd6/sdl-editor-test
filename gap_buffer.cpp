@@ -19,9 +19,16 @@ struct gap_buffer
     void initialize();
     void make_gap();
 
-    void cursor_backwards();
-    void cursor_forward();
+    bool cursor_forward();
+    bool cursor_backward();
+    bool delete_char_forward();
+    bool delete_char_backward();
+
+    void move_buffer_to_current_point();
     void insert_at_point(uint8 character);
+
+    // TODO(Cleaup): Change to size_t.
+    int get_idx() const;
 
     void DEBUG_print_state() const;
 
@@ -31,6 +38,7 @@ struct gap_buffer
 
 uint8 const* gap_buffer::to_c_str() const
 {
+    // TODO: Alloc function.
     auto result = static_cast<uint8*>(std::malloc(sizeof(uint8) * alloced_mem_size));
     result[0] = '\0';
     auto resutl_idx = 0;
@@ -51,8 +59,20 @@ uint8 const* gap_buffer::to_c_str() const
         }
     }
 
-    printf("result is: \"%s\"\n", result);
     return result;
+}
+
+int gap_buffer::get_idx() const
+{
+    if (IS_EARLIER_IN_ARR(buffer, curr_point, gap_start)
+        || gap_start == curr_point)
+    {
+        return curr_point - buffer;
+    }
+    else
+    {
+        return (gap_start - buffer) + (curr_point - gap_end);
+    }
 }
 
 void gap_buffer::initialize()
@@ -68,7 +88,7 @@ void gap_buffer::initialize()
     curr_point = buffer;
 }
 
-void gap_buffer::cursor_backwards()
+bool gap_buffer::cursor_backward()
 {
     if (curr_point != buffer)
     {
@@ -76,40 +96,76 @@ void gap_buffer::cursor_backwards()
             curr_point = gap_start;
         else
             curr_point--;
+
+        return true;
     }
     else
-        PANIC("Already at the begin of the line!");
+        return false;
 }
 
-void gap_buffer::cursor_forward()
+bool gap_buffer::cursor_forward()
 {
     if ((buffer + alloced_mem_size) != curr_point) // TODO: Make sure this is correct.
     {
         if (curr_point == gap_start)
-            curr_point = gap_end + 1; // TODO(Cleanup): Is this legal -> gap_end + 1.
+        {
+            if (gap_end == buffer + alloced_mem_size)
+                return false;
+            else
+                curr_point = gap_end + 1; // TODO(Cleanup): Is this legal -> gap_end + 1.
+        }
         else
             curr_point++;
     }
     else
-        PANIC("Already at the end of the line!");
+        return false;
+
+    return true;
 }
 
-void gap_buffer::insert_at_point(uint8 character) // LATIN2 characters only.
+bool gap_buffer::delete_char_backward()
 {
-    // If cursor is inside the buffer.
-    if (curr_point == gap_start)
+    if (curr_point != buffer)
     {
-        *curr_point = character;
-        curr_point++;
-        gap_start++;
+        move_buffer_to_current_point();
+
+        gap_start--;
+        curr_point--;
+
+        return true;
     }
-    else if (IS_EARLIER_IN_ARR(buffer, curr_point, gap_start))
+    else
+        return false;
+}
+
+bool gap_buffer::delete_char_forward()
+{
+    if ((buffer + alloced_mem_size) != curr_point) // TODO: Make sure this is correct.
+    {
+        move_buffer_to_current_point();
+
+        // If gap end is at the end of the buffer.
+        // We must check this after moving the buffer.
+        // TODO(Cleaup): Think if we can do it without moving the buffer first.
+        if (gap_end == buffer + alloced_mem_size)
+            return false;
+
+        gap_end++; // Check if gap end is not at the end of the buffer
+    }
+    else
+        return false;
+
+    return true;
+}
+
+void gap_buffer::move_buffer_to_current_point()
+{
+    if (IS_EARLIER_IN_ARR(buffer, curr_point, gap_start))
     {
         auto diff = gap_start - curr_point;
         memcpy(gap_end - diff, curr_point, sizeof(uint8) * diff);
         gap_start -= diff;
         gap_end -= diff;
-        insert_at_point(character);
     }
     else if (IS_EARLIER_IN_ARR(buffer, gap_start, curr_point))
     {
@@ -118,10 +174,21 @@ void gap_buffer::insert_at_point(uint8 character) // LATIN2 characters only.
         gap_start += diff;
         gap_end += diff;
         curr_point = gap_start;
-        insert_at_point(character);
+    }
+    else if (curr_point == gap_start)
+    {
     }
     else
         UNREACHABLE();
+}
+
+void gap_buffer::insert_at_point(uint8 character) // LATIN2 characters only.
+{
+    move_buffer_to_current_point();
+
+    *curr_point = character;
+    curr_point++;
+    gap_start++;
 }
 
 #pragma clang diagnostic push
