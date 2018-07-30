@@ -31,11 +31,11 @@ typedef uint64_t uint64;
 
 // #define RANDOM_WINDOW_COLORS
 #ifdef RANDOM_WINDOW_COLORS
-  // TODO(Temporary):
-  #include <time.h>
-  #define WINDOW_COLOR (rand())
+// TODO(Temporary):
+#include <time.h>
+#define WINDOW_COLOR (rand())
 #else
-  #define WINDOW_COLOR (0x101010)
+#define WINDOW_COLOR (0x101010)
 #endif
 
 enum WindowSplit { WIN_SPLIT_VERTCAL, WIN_SPLIT_HORIZONTAL };
@@ -323,9 +323,9 @@ void EditorWindow::UpdateSize(Rect new_rect)
                     : 1));
 
         auto min_pos = (split == WindowSplit::WIN_SPLIT_HORIZONTAL
-                       ? position.x : position.y);
+                        ? position.x : position.y);
         auto max_pos = (split == WindowSplit::WIN_SPLIT_HORIZONTAL
-                       ? position.x + position.width : position.y + position.height);
+                        ? position.x + position.width : position.y + position.height);
         auto difference = max_pos - min_pos;
         ASSERT(difference > 0);
 
@@ -349,9 +349,9 @@ void EditorWindow::UpdateSize(Rect new_rect)
             auto nested_window_rect =
                 (split == WindowSplit::WIN_SPLIT_HORIZONTAL
                  ? Rect { previous_split, position.y,
-                          split_idx[i]-previous_split, position.height }
+                        split_idx[i]-previous_split, position.height }
                  : Rect { position.x, previous_split,
-                          position.width, split_idx[i]-previous_split });
+                           position.width, split_idx[i]-previous_split });
 
 #if 1
             // TODO(Profiling): Move outside the loop for better performace?
@@ -361,12 +361,12 @@ void EditorWindow::UpdateSize(Rect new_rect)
                     (split == WindowSplit::WIN_SPLIT_HORIZONTAL
                      ? Rect {
                         split_idx[i], nested_window_rect.y,
-                        1, nested_window_rect.height
-                    }
+                            1, nested_window_rect.height
+                            }
                      : Rect {
                         nested_window_rect.x, split_idx[i],
-                        nested_window_rect.width, 1
-                    });
+                            nested_window_rect.width, 1
+                            });
 
                 DrawSplittingLine(splitting_rect);
             }
@@ -425,15 +425,15 @@ namespace editor_window_utility
                 ->GetScreenPercForSplitType(WindowSplit::WIN_SPLIT_HORIZONTAL) >= 0.2f)
 #endif
 
-            if (parent_window->splits_percentages[index_in_parent - 1] - prev_split
-                >= MIN_PERCANTAGE_WINDOW_SPLIT)
-            {
-                parent_window->splits_percentages[index_in_parent - 1] -= 0.01f;
-                parent_window->UpdateSize(parent_window->position);
-                parent_window->Redraw(false); // Split window, cannot select.
-            }
-            else
-                LOG_WARN("Left window is too small!!");
+                if (parent_window->splits_percentages[index_in_parent - 1] - prev_split
+                    >= MIN_PERCANTAGE_WINDOW_SPLIT)
+                {
+                    parent_window->splits_percentages[index_in_parent - 1] -= 0.01f;
+                    parent_window->UpdateSize(parent_window->position);
+                    parent_window->Redraw(false); // Split window, cannot select.
+                }
+                else
+                    LOG_WARN("Left window is too small!!");
         }
 
         static void ResizeIthWindowRight(EditorWindow* parent_window,
@@ -522,7 +522,7 @@ static void InitializeFirstWindow()
 {
     global::number_of_buffers = 2;
     global::buffers[0] = { .color = 0xffffff }; // Buffer with index 0 is a
-                                                 // minibufer.
+    // minibufer.
     global::buffers[1] = { .color = WINDOW_COLOR };
 
     global::number_of_windows = 2;
@@ -554,13 +554,13 @@ static int ResizeWindow()
 {
     global::windows_arr[0].UpdateSize(Rect {
             0, global::window_h - 17 +1,
-            global::window_w, 17
-        });
+                global::window_w, 17
+                });
 
     global::windows_arr[1].UpdateSize(Rect {
             0, 0,
-            global::window_w, global::window_h - 17
-        });
+                global::window_w, global::window_h - 17
+                });
 
     return 0;
 }
@@ -617,7 +617,8 @@ static void InitTextGlobalSutff()
 
 static void PrintTextLine(EditorWindow const* window_ptr,
                           int line_nr, // First visible line of the buffer is 0.
-                          char const* text) // gap_buffer const* line
+                          char const* text,
+                          int cursor_idx) // gap_buffer const* line
 {
     for (auto i = 0; text[i]; ++i)
     {
@@ -631,9 +632,9 @@ static void PrintTextLine(EditorWindow const* window_ptr,
         };
 
         if (draw_rect.x + draw_rect.w >
-                window_ptr->position.x + window_ptr->position.width
+            window_ptr->position.x + window_ptr->position.width
             || draw_rect.y + draw_rect.h >
-                window_ptr->position.y + window_ptr->position.height)
+            window_ptr->position.y + window_ptr->position.height)
         {
             return;
         }
@@ -644,6 +645,18 @@ static void PrintTextLine(EditorWindow const* window_ptr,
             PANIC("Bitting surface failed!");
         }
     }
+
+    if (cursor_idx >= 0)
+    {
+        auto rect = SDL_Rect {
+            window_ptr->position.x + 2 + global::alphabet[static_cast<int>('a')]->w * cursor_idx,
+            window_ptr->position.y + 2 + global::text_surface[0]->h * line_nr,
+            2,
+            global::alphabet[static_cast<int>('a')]->h
+        };
+
+        SDL_FillRect(global::screen, &rect, 0xF8F8F8FF);
+    }
 }
 
 static void PrintTextLineFromGapBuffer(EditorWindow const* window_ptr,
@@ -651,7 +664,9 @@ static void PrintTextLineFromGapBuffer(EditorWindow const* window_ptr,
                                        gap_buffer const* line)
 {
     auto text = line->to_c_str();
-    PrintTextLine(window_ptr, line_nr, reinterpret_cast<char const*>(text));
+    auto idx = line->curr_point - line->buffer;
+    PrintTextLine(window_ptr, line_nr, reinterpret_cast<char const*>(text), idx);
+
     std::free((void *)text);
 }
 
@@ -695,21 +710,21 @@ static int RedrawWindow()
             auto right_w = global::windows_arr + 4;
             auto gap_w = global::windows_arr + 5;
 
-            PrintTextLine(left_w, 0, "#include <iostream>");
-            PrintTextLine(left_w, 2, "int main()");
-            PrintTextLine(left_w, 3, "{");
-            PrintTextLine(left_w, 4, "    const auto foobar = \"Hello world!\";");
-            PrintTextLine(left_w, 5, "    std::cout << foobar << endl;");
-            PrintTextLine(left_w, 7, "    return 0;");
-            PrintTextLine(left_w, 8, "}");
+            PrintTextLine(left_w, 0, "#include <iostream>", -1);
+            PrintTextLine(left_w, 2, "int main()", -1);
+            PrintTextLine(left_w, 3, "{", -1);
+            PrintTextLine(left_w, 4, "    const auto foobar = \"Hello world!\";", -1);
+            PrintTextLine(left_w, 5, "    std::cout << foobar << endl;", -1);
+            PrintTextLine(left_w, 7, "    return 0;", -1);
+            PrintTextLine(left_w, 8, "}", -1);
 
-            PrintTextLine(right_w, 0, "<!DOCTYPE html>");
-            PrintTextLine(right_w, 1, "<html>");
-            PrintTextLine(right_w, 2, "  <body>");
-            PrintTextLine(right_w, 3, "    <h1>Example heading</h1>");
-            PrintTextLine(right_w, 4, "    <p>Example paragraph</p>");
-            PrintTextLine(right_w, 5, "  </body>");
-            PrintTextLine(right_w, 6, "</html>");
+            PrintTextLine(right_w, 0, "<!DOCTYPE html>", -1);
+            PrintTextLine(right_w, 1, "<html>", -1);
+            PrintTextLine(right_w, 2, "  <body>", -1);
+            PrintTextLine(right_w, 3, "    <h1>Example heading</h1>", -1);
+            PrintTextLine(right_w, 4, "    <p>Example paragraph</p>", -1);
+            PrintTextLine(right_w, 5, "  </body>", -1);
+            PrintTextLine(right_w, 6, "</html>", -1);
 
             PrintTextLineFromGapBuffer(gap_w, 0, &gap_w->buffer_ptr->one_line_buffer);
         }
