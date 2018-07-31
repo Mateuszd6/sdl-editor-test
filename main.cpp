@@ -16,13 +16,22 @@
 #include "debug_goodies.h"
 
 typedef int8_t int8;
-typedef int16_t int16;
-typedef int32_t int32;
-typedef int64_t int64;
 typedef uint8_t uint8;
+typedef int16_t int16;
 typedef uint16_t uint16;
+typedef int32_t int32;
 typedef uint32_t uint32;
+typedef int64_t int64;
 typedef uint64_t uint64;
+
+int8 operator"" _i8(unsigned long long liter) { return static_cast<int8>(liter); }
+uint8 operator"" _u8(unsigned long long liter) { return static_cast<uint8>(liter); }
+int16 operator"" _i16(unsigned long long liter) { return static_cast<int16>(liter); }
+uint16 operator"" _u16(unsigned long long liter) { return static_cast<uint16>(liter); }
+int32 operator"" _i32(unsigned long long liter) { return static_cast<int32>(liter); }
+uint32 operator"" _u32(unsigned long long liter) { return static_cast<uint32>(liter); }
+int64 operator"" _i64(unsigned long long liter) { return static_cast<int64>(liter); }
+uint64 operator"" _u64(unsigned long long liter) { return static_cast<uint64>(liter); }
 
 #include <SDL.h>
 #include <SDL_ttf.h>
@@ -49,11 +58,15 @@ struct Rect
     int height;
 };
 
+#define NUMBER_OF_LINES_IN_BUFFER (256)
+
 struct EditorBuffer
 {
+    // TODO: This will have to be removed later.
     int color;
 
-    gap_buffer one_line_buffer;
+    uint64 curr_line;
+    gap_buffer lines[NUMBER_OF_LINES_IN_BUFFER];
 };
 
 #define MAX_WINDOWS_ON_SPLIT (10)
@@ -149,7 +162,8 @@ static void DrawSplittingLine(const Rect &rect)
 static EditorBuffer *CreateNewBuffer()
 {
     global::buffers[global::number_of_buffers].color = WINDOW_COLOR;
-    global::buffers[global::number_of_buffers].one_line_buffer.initialize();
+    for (int i = 0; i < NUMBER_OF_LINES_IN_BUFFER; ++i)
+        global::buffers[global::number_of_buffers].lines[i].initialize();
 
     auto result = global::buffers + global::number_of_buffers;
     global::number_of_buffers++;
@@ -553,13 +567,11 @@ static void InitializeFirstWindow()
 static int ResizeWindow()
 {
     global::windows_arr[0].UpdateSize(Rect {
-            0, global::window_h - 17 +1,
-                global::window_w, 17
+            0, global::window_h - 17 +1, global::window_w, 17
                 });
 
     global::windows_arr[1].UpdateSize(Rect {
-            0, 0,
-                global::window_w, global::window_h - 17
+            0, 0, global::window_w, global::window_h - 17
                 });
 
     return 0;
@@ -661,12 +673,16 @@ static void PrintTextLine(EditorWindow const* window_ptr,
 
 static void PrintTextLineFromGapBuffer(EditorWindow const* window_ptr,
                                        int line_nr, // First visible line of the buffer is 0.
-                                       gap_buffer const* line)
+                                       gap_buffer const* line,
+                                       bool draw_cursor)
 {
     auto text = line->to_c_str();
     auto idx = line->get_idx();
 
-    PrintTextLine(window_ptr, line_nr, reinterpret_cast<char const*>(text), idx);
+    PrintTextLine(window_ptr,
+                  line_nr,
+                  reinterpret_cast<char const*>(text),
+                  draw_cursor ? idx : -1);
 
 #if 0
     system("clear");
@@ -732,7 +748,14 @@ static int RedrawWindow()
             PrintTextLine(right_w, 5, "  </body>", -1);
             PrintTextLine(right_w, 6, "</html>", -1);
 
-            PrintTextLineFromGapBuffer(gap_w, 0, &gap_w->buffer_ptr->one_line_buffer);
+
+            for (auto i = 0ULL; i < 128ULL; ++i)
+            {
+                PrintTextLineFromGapBuffer(gap_w,
+                                           i,
+                                           gap_w->buffer_ptr->lines + i,
+                                           gap_w->buffer_ptr->curr_line == i);
+            }
         }
     }
 
@@ -1155,21 +1178,38 @@ static int HandleEvent(const SDL_Event &event)
             if (character != '\0')
             {
                 (global::windows_arr + 5)->buffer_ptr
-                                         ->one_line_buffer.insert_at_point(character);
+                                         ->lines[(global::windows_arr + 5)->buffer_ptr->curr_line]
+                                          .insert_at_point(character);
                 succeeded = true; // Inserting character cannot fail.
             }
             else if (arrow == 1)
                 succeeded = (global::windows_arr + 5)->buffer_ptr
-                                                     ->one_line_buffer.cursor_forward();
+                                                     ->lines[(global::windows_arr + 5)->buffer_ptr->curr_line]
+                                                      .cursor_forward();
             else if (arrow == 2)
                 succeeded = (global::windows_arr + 5)->buffer_ptr
-                                                     ->one_line_buffer.cursor_backward();
+                                                     ->lines[(global::windows_arr + 5)->buffer_ptr->curr_line]
+                                                      .cursor_backward();
+            else if (arrow == 3)
+            {
+                if ((global::windows_arr + 5)->buffer_ptr->curr_line > 0)
+                    (global::windows_arr + 5)->buffer_ptr->curr_line--;
+
+                succeeded = true; // This cannot fail.
+            }
+            else if (arrow == 4)
+            {
+                (global::windows_arr + 5)->buffer_ptr->curr_line++;
+                succeeded = true; // This cannot fail.
+            }
             else if (backspace)
                 succeeded = (global::windows_arr + 5)->buffer_ptr
-                                                     ->one_line_buffer.delete_char_backward();
+                                                     ->lines[(global::windows_arr + 5)->buffer_ptr->curr_line]
+                                                      .delete_char_backward();
             else if (del)
                 succeeded = (global::windows_arr + 5)->buffer_ptr
-                                                     ->one_line_buffer.delete_char_forward();
+                                                     ->lines[(global::windows_arr + 5)->buffer_ptr->curr_line]
+                                                      .delete_char_forward();
 
             if (!succeeded)
             {

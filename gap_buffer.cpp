@@ -177,6 +177,7 @@ void gap_buffer::move_buffer_to_current_point()
     }
     else if (curr_point == gap_start)
     {
+        // TODO(Cleanup): Don't do anything?
     }
     else
         UNREACHABLE();
@@ -244,65 +245,3 @@ void gap_buffer::DEBUG_print_state() const
 }
 
 #pragma clang diagnostic pop
-
-#if 0
-// ---------------------------------
-
-int main()
-{
-    std::printf("Size of gap_buffer struct: %ld\n", sizeof(gap_buffer));
-
-    gap_buffer test_line;
-    test_line.initialize();
-    test_line.DEBUG_print_state();
-    test_line.insert_at_point('a');
-    test_line.insert_at_point('b');
-    test_line.insert_at_point('c');
-    test_line.insert_at_point('d');
-    test_line.insert_at_point('e');
-    test_line.insert_at_point('f');
-    test_line.insert_at_point('g');
-    test_line.DEBUG_print_state();
-    test_line.cursor_backwards();
-    test_line.cursor_backwards();
-    test_line.cursor_backwards();
-    test_line.cursor_backwards();
-    test_line.DEBUG_print_state();
-    test_line.insert_at_point('o');
-    test_line.DEBUG_print_state();
-    test_line.cursor_forward();
-    test_line.cursor_forward();
-    // test_line.cursor_forward();
-    test_line.DEBUG_print_state();
-    test_line.insert_at_point('x');
-
-    while(1)
-    {
-        char c;
-        scanf("%c", &c);
-
-        switch(static_cast<int>(c))
-        {
-            case 113:
-            {
-                test_line.cursor_backwards();
-            } break;
-
-            case 119:
-            {
-                test_line.cursor_forward();
-            } break;
-
-            default:
-            {
-                if ('a' <= c && c <= 'z')
-                    test_line.insert_at_point(c);
-            } break;
-        }
-
-        system("clear");
-        test_line.DEBUG_print_state();
-    }
-    return 0;
-}
-#endif
