@@ -1,41 +1,6 @@
 #include <cstdlib>
 #include <cstring>
 
-struct gap_buffer
-{
-    uint8* buffer;
-    size_t alloced_mem_size;
-
-    // Navigation pointers:
-    uint8* gap_start;
-    uint8* gap_end;
-
-    // TODO(Cleaup): I think this should be removed. Possibly create other class called
-    //               gap_buffer_ptr, or just just regulrat uint8*?
-    uint8* curr_point;
-
-    void initialize();
-    void make_gap();
-
-    bool cursor_forward();
-    bool cursor_backward();
-    bool delete_char_forward();
-    bool delete_char_backward();
-
-    void move_buffer_to_current_point();
-    void insert_at_point(uint8 character);
-
-#if 0
-    // TODO(Cleaup): Change to size_t.
-    int get_idx() const;
-#endif
-
-    // TODO: Temporary, remove later:
-    uint8 const* to_c_str() const;
-
-    void DEBUG_print_state() const;
-};
-
 uint8 const* gap_buffer::to_c_str() const
 {
     // TODO: Alloc function.
@@ -216,8 +181,8 @@ void gap_buffer::DEBUG_print_state() const
 
         ptr++;
     }
-    // print_buffer[print_buffer_idx++] = '0';
-    // ASSERT(print_buffer_idx < alloced_mem_size); // TODO: Or <= ????
+
+    ASSERT(print_buffer_idx < alloced_mem_size); // TODO: Or <= ????
     for (auto i = print_buffer_idx; i < alloced_mem_size; ++i)
         print_buffer[print_buffer_idx++] = '_';
     print_buffer[print_buffer_idx++] = '\n';

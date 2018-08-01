@@ -1,51 +1,15 @@
-#include <stdio.h>
-#include <cstdint>
-
-// TODO(Cleanup): Move to other config file!
-#define SUCCEEDED(expr_res) (static_cast<int>(expr_res) >= 0)
-#define FAILED(expr_res) (static_cast<int>(expr_res) < 0)
-#define IS_NULL(expr_res) ((expr_res) == nullptr)
-
-// TODO(Cleanup): Change/refactor or just add summary.
-#define IS_EARLIER_IN_ARR(ARR, FIRST, SECOND) (FIRST - ARR < SECOND - ARR)
-
-#define DEBUG
-#define LOGGING
-#define DG_LOG_LVL DG_LOG_LVL_WARN // DG_LOG_LVL_ALL
-#define DG_USE_COLORS 1
-#include "debug_goodies.h"
-
-typedef int8_t int8;
-typedef uint8_t uint8;
-typedef int16_t int16;
-typedef uint16_t uint16;
-typedef int32_t int32;
-typedef uint32_t uint32;
-typedef int64_t int64;
-typedef uint64_t uint64;
-
-int8 operator"" _i8(unsigned long long liter) { return static_cast<int8>(liter); }
-uint8 operator"" _u8(unsigned long long liter) { return static_cast<uint8>(liter); }
-int16 operator"" _i16(unsigned long long liter) { return static_cast<int16>(liter); }
-uint16 operator"" _u16(unsigned long long liter) { return static_cast<uint16>(liter); }
-int32 operator"" _i32(unsigned long long liter) { return static_cast<int32>(liter); }
-uint32 operator"" _u32(unsigned long long liter) { return static_cast<uint32>(liter); }
-int64 operator"" _i64(unsigned long long liter) { return static_cast<int64>(liter); }
-uint64 operator"" _u64(unsigned long long liter) { return static_cast<uint64>(liter); }
-
 #include <SDL.h>
 #include <SDL_ttf.h>
 
-#include "gap_buffer.cpp"
+#include "config.h"
 
-// #define RANDOM_WINDOW_COLORS
-#ifdef RANDOM_WINDOW_COLORS
-// TODO(Temporary):
-#include <time.h>
-#define WINDOW_COLOR (rand())
-#else
-#define WINDOW_COLOR (0x101010)
-#endif
+// TODO(Cleanup): remove from here as many as possible.
+#include "gap_buffer.hpp"
+#include "editor/buffer.hpp"
+
+// TODO(Cleaup): Only for unity build.
+#include "gap_buffer.cpp"
+#include "editor/buffer.cpp"
 
 enum WindowSplit { WIN_SPLIT_VERTCAL, WIN_SPLIT_HORIZONTAL };
 enum WindowTraverseMode { WIN_TRAVERSE_FORWARD, WIN_TRAVERSE_BACKWARDS };
@@ -56,18 +20,6 @@ struct Rect
     int y;
     int width;
     int height;
-};
-
-#define NUMBER_OF_LINES_IN_BUFFER (256)
-
-struct EditorBuffer
-{
-    // TODO: This will have to be removed later.
-    int color;
-
-    uint64 curr_line;
-    uint64 curr_index;
-    gap_buffer lines[NUMBER_OF_LINES_IN_BUFFER];
 };
 
 #define MAX_WINDOWS_ON_SPLIT (10)
@@ -92,7 +44,7 @@ struct EditorWindow
     {
         struct // If contains single buffer:
         {
-            EditorBuffer *buffer_ptr;
+            editor::buffer *buffer_ptr;
         };
         struct // If is splited into multiple windows:
         {
@@ -142,7 +94,7 @@ namespace global
     static int number_of_windows = 0;
     static EditorWindow windows_arr[256];
     static int number_of_buffers = 0;
-    static EditorBuffer buffers[256];
+    static editor::buffer buffers[256];
 
     // Index of window that displays currently selected buffer.
     static int current_window_idx;
@@ -153,16 +105,15 @@ namespace global
 }
 
 // TODO(Splitting lines): Remove unused atrribute!
-// __attribute__ ((unused))
+__attribute__ ((unused))
 static void DrawSplittingLine(const Rect &rect)
 {
     auto split_line = SDL_Rect { rect.x, rect.y, rect.width, rect.height };
     SDL_FillRect(global::screen, &split_line, 0x000000); // 0x64645e
 }
 
-static EditorBuffer *CreateNewBuffer()
+static editor::buffer *CreateNewBuffer()
 {
-    global::buffers[global::number_of_buffers].color = WINDOW_COLOR;
     for (int i = 0; i < NUMBER_OF_LINES_IN_BUFFER; ++i)
         global::buffers[global::number_of_buffers].lines[i].initialize();
 
@@ -171,7 +122,7 @@ static EditorBuffer *CreateNewBuffer()
     return result;
 }
 
-static EditorWindow *CreateNewWindowWithBuffer(EditorBuffer *buffer,
+static EditorWindow *CreateNewWindowWithBuffer(editor::buffer *buffer,
                                                EditorWindow *root_window)
 {
     global::windows_arr[global::number_of_windows++] =
@@ -405,7 +356,7 @@ void EditorWindow::Redraw(bool current_select) const
 
         SDL_FillRect(global::screen,
                      &sdl_rect,
-                     current_select ? 0x272822 : buffer_ptr->color);
+                     current_select ? 0x272822 : 0x171812);
 
     }
     else
@@ -478,8 +429,10 @@ namespace editor_window_utility
         }
     }
 
+    // NOTE: [curr_window] is heavily assumed to be the selected window.
     // TODO: Find better name.
-    // [curr_window] is heavily assumed to be the selected window.
+    // TODO: Remove unused atrribute!
+    __attribute__ ((unused))
     static void ResizeWindowAux(EditorWindow* curr_window,
                                 WindowSplit split_type,
                                 WindowTraverseMode direction)
@@ -536,9 +489,9 @@ namespace editor_window_utility
 static void InitializeFirstWindow()
 {
     global::number_of_buffers = 2;
-    global::buffers[0] = { .color = 0xffffff }; // Buffer with index 0 is a
+    global::buffers[0] = {}; // TODO(Next): Initailize buffers.
     // minibufer.
-    global::buffers[1] = { .color = WINDOW_COLOR };
+    global::buffers[1] = {}; // TODO(Next): Initailize buffers.
 
     global::number_of_windows = 2;
 
@@ -662,7 +615,8 @@ static void PrintTextLine(EditorWindow const* window_ptr,
     if (cursor_idx >= 0)
     {
         auto rect = SDL_Rect {
-            window_ptr->position.x + 2 + global::alphabet[static_cast<int>('a')]->w * cursor_idx,
+            window_ptr->position.x + 2 +
+                global::alphabet[static_cast<int>('a')]->w * cursor_idx,
             window_ptr->position.y + 2 + global::text_surface[0]->h * line_nr,
             2,
             global::alphabet[static_cast<int>('a')]->h
@@ -678,7 +632,6 @@ static void PrintTextLineFromGapBuffer(EditorWindow const* window_ptr,
                                        int current_idx)
 {
     auto text = line->to_c_str();
-
     PrintTextLine(window_ptr,
                   line_nr,
                   reinterpret_cast<char const*>(text),
@@ -686,9 +639,9 @@ static void PrintTextLineFromGapBuffer(EditorWindow const* window_ptr,
 
 #if 0
     system("clear");
-    printf("IDX: %d\n", idx);
     line->DEBUG_print_state();
 #endif
+
     std::free(reinterpret_cast<void *>(const_cast<unsigned char*>(text)));
 }
 
@@ -862,6 +815,8 @@ static void SwitchWindow(const WindowTraverseMode traverse)
     global::current_window_idx = next_window - global::windows_arr;
 }
 
+// TODO: Remove unused atrribute!
+__attribute__ ((unused))
 static void SwitchToMiniBuffer()
 {
     if (global::current_window_idx == 0)
@@ -874,6 +829,8 @@ static void SwitchToMiniBuffer()
     global::current_window_idx = 0;
 }
 
+// TODO: Remove unused atrribute!
+__attribute__ ((unused))
 static void SwitchOutFromMiniBuffer()
 {
     if (global::current_window_idx != 0)
@@ -1179,53 +1136,32 @@ static int HandleEvent(const SDL_Event &event)
             auto succeeded = false;
             if (character != '\0')
             {
-                (global::windows_arr + 5)->buffer_ptr
-                                         ->lines[(global::windows_arr + 5)->buffer_ptr->curr_line]
-                                          .insert_at_point(character);
-                (global::windows_arr + 5)->buffer_ptr->curr_index++;
-                succeeded = true; // Inserting character cannot fail.
+                (global::windows_arr + 5)->buffer_ptr->insert_character(character);
             }
             else if (arrow == 1)
             {
-                succeeded = (global::windows_arr + 5)->buffer_ptr
-                                                     ->lines[(global::windows_arr + 5)->buffer_ptr->curr_line]
-                                                      .cursor_forward();
-                if (succeeded)
-                    (global::windows_arr + 5)->buffer_ptr->curr_index++;
+                (global::windows_arr + 5)->buffer_ptr->move_forward_curr_line();
             }
             else if (arrow == 2)
             {
-                succeeded = (global::windows_arr + 5)->buffer_ptr
-                                                     ->lines[(global::windows_arr + 5)->buffer_ptr->curr_line]
-                                                      .cursor_backward();
-                if (succeeded)
-                    (global::windows_arr + 5)->buffer_ptr->curr_index--;
+                (global::windows_arr + 5)->buffer_ptr->move_backward_curr_line();
             }
             else if (arrow == 3)
             {
-                if ((global::windows_arr + 5)->buffer_ptr->curr_line > 0)
-                    (global::windows_arr + 5)->buffer_ptr->curr_line--;
-
-                succeeded = true; // This cannot fail.
+                (global::windows_arr + 5)->buffer_ptr->move_line_up();
             }
             else if (arrow == 4)
             {
-                (global::windows_arr + 5)->buffer_ptr->curr_line++;
-                succeeded = true; // This cannot fail.
+                (global::windows_arr + 5)->buffer_ptr->move_line_down();
             }
             else if (backspace)
             {
-                succeeded = (global::windows_arr + 5)->buffer_ptr
-                                                     ->lines[(global::windows_arr + 5)->buffer_ptr->curr_line]
-                                                      .delete_char_backward();
-
-                if (succeeded)
-                    (global::windows_arr + 5)->buffer_ptr->curr_index--;
+                (global::windows_arr + 5)->buffer_ptr->delete_char_at_cursor_backward();
             }
             else if (del)
-                succeeded = (global::windows_arr + 5)->buffer_ptr
-                                                     ->lines[(global::windows_arr + 5)->buffer_ptr->curr_line]
-                                                      .delete_char_forward();
+            {
+                (global::windows_arr + 5)->buffer_ptr->delete_char_at_cursor_forward();
+            }
 
             if (!succeeded)
             {
@@ -1423,6 +1359,8 @@ static bool Validate(EditorWindow *window)
     }
 }
 
+// TODO: Remove unused atrribute!
+__attribute__ ((unused))
 static void DEBUG_PrintWindowsState(const EditorWindow *window)
 {
     if (!window)

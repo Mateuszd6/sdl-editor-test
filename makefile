@@ -1,5 +1,5 @@
 all:
-	clang++ -g -O0 -std=c++14                                               \
+	clang++ -g -O0 -std=c++17                                               \
 		-Wall -Wextra -Wshadow -Wno-write-strings			\
 		-Wzero-as-null-pointer-constant -Wold-style-cast                \
 		$(shell sdl2-config --cflags)                 \
