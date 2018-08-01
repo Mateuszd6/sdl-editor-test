@@ -66,6 +66,7 @@ struct EditorBuffer
     int color;
 
     uint64 curr_line;
+    uint64 curr_index;
     gap_buffer lines[NUMBER_OF_LINES_IN_BUFFER];
 };
 
@@ -674,15 +675,14 @@ static void PrintTextLine(EditorWindow const* window_ptr,
 static void PrintTextLineFromGapBuffer(EditorWindow const* window_ptr,
                                        int line_nr, // First visible line of the buffer is 0.
                                        gap_buffer const* line,
-                                       bool draw_cursor)
+                                       int current_idx)
 {
     auto text = line->to_c_str();
-    auto idx = line->get_idx();
 
     PrintTextLine(window_ptr,
                   line_nr,
                   reinterpret_cast<char const*>(text),
-                  draw_cursor ? idx : -1);
+                  current_idx);
 
 #if 0
     system("clear");
@@ -754,7 +754,9 @@ static int RedrawWindow()
                 PrintTextLineFromGapBuffer(gap_w,
                                            i,
                                            gap_w->buffer_ptr->lines + i,
-                                           gap_w->buffer_ptr->curr_line == i);
+                                           (gap_w->buffer_ptr->curr_line == i
+                                                ? gap_w->buffer_ptr->curr_index
+                                                : -1));
             }
         }
     }
@@ -1180,16 +1182,25 @@ static int HandleEvent(const SDL_Event &event)
                 (global::windows_arr + 5)->buffer_ptr
                                          ->lines[(global::windows_arr + 5)->buffer_ptr->curr_line]
                                           .insert_at_point(character);
+                (global::windows_arr + 5)->buffer_ptr->curr_index++;
                 succeeded = true; // Inserting character cannot fail.
             }
             else if (arrow == 1)
+            {
                 succeeded = (global::windows_arr + 5)->buffer_ptr
                                                      ->lines[(global::windows_arr + 5)->buffer_ptr->curr_line]
                                                       .cursor_forward();
+                if (succeeded)
+                    (global::windows_arr + 5)->buffer_ptr->curr_index++;
+            }
             else if (arrow == 2)
+            {
                 succeeded = (global::windows_arr + 5)->buffer_ptr
                                                      ->lines[(global::windows_arr + 5)->buffer_ptr->curr_line]
                                                       .cursor_backward();
+                if (succeeded)
+                    (global::windows_arr + 5)->buffer_ptr->curr_index--;
+            }
             else if (arrow == 3)
             {
                 if ((global::windows_arr + 5)->buffer_ptr->curr_line > 0)
@@ -1203,9 +1214,14 @@ static int HandleEvent(const SDL_Event &event)
                 succeeded = true; // This cannot fail.
             }
             else if (backspace)
+            {
                 succeeded = (global::windows_arr + 5)->buffer_ptr
                                                      ->lines[(global::windows_arr + 5)->buffer_ptr->curr_line]
                                                       .delete_char_backward();
+
+                if (succeeded)
+                    (global::windows_arr + 5)->buffer_ptr->curr_index--;
+            }
             else if (del)
                 succeeded = (global::windows_arr + 5)->buffer_ptr
                                                      ->lines[(global::windows_arr + 5)->buffer_ptr->curr_line]

@@ -1,8 +1,6 @@
 #include <cstdlib>
 #include <cstring>
 
-typedef uint8_t uint8;
-
 struct gap_buffer
 {
     uint8* buffer;
@@ -27,13 +25,15 @@ struct gap_buffer
     void move_buffer_to_current_point();
     void insert_at_point(uint8 character);
 
+#if 0
     // TODO(Cleaup): Change to size_t.
     int get_idx() const;
-
-    void DEBUG_print_state() const;
+#endif
 
     // TODO: Temporary, remove later:
     uint8 const* to_c_str() const;
+
+    void DEBUG_print_state() const;
 };
 
 uint8 const* gap_buffer::to_c_str() const
@@ -62,6 +62,7 @@ uint8 const* gap_buffer::to_c_str() const
     return result;
 }
 
+#if 0
 int gap_buffer::get_idx() const
 {
     if (IS_EARLIER_IN_ARR(buffer, curr_point, gap_start)
@@ -70,10 +71,9 @@ int gap_buffer::get_idx() const
         return curr_point - buffer;
     }
     else
-    {
         return (gap_start - buffer) + (curr_point - gap_end);
-    }
 }
+#endif
 
 void gap_buffer::initialize()
 {
