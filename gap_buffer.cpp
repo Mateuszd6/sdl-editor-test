@@ -1,15 +1,19 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "config.h"
+
+// TODO(Cleaup): This should be removed by the cleaup, or ;
 uint8 const* gap_buffer::to_c_str() const
 {
     // TODO: Alloc function.
-    auto result = static_cast<uint8*>(std::malloc(sizeof(uint8) * alloced_mem_size));
+    auto result = static_cast<uint8*>(
+        std::malloc(sizeof(uint8) * alloced_mem_size));
     result[0] = '\0';
     auto resutl_idx = 0;
     auto in_gap = false;
 
-    for (auto i = 0LLU; i < alloced_mem_size; ++i)
+    for (auto i = 0_u64; i < alloced_mem_size; ++i)
     {
         if (buffer + i == gap_start)
             in_gap = true;

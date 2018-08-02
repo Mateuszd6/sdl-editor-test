@@ -1,5 +1,25 @@
+// TODO(Cleanup): Try to use as less globals as possible...
+namespace editor::global
+{
+    static int number_of_buffers = 0;
+    static editor::buffer buffers[256];
+}
+
+
 namespace editor
 {
+    // TODO(Docs): Summary!
+    static editor::buffer *CreateNewBuffer()
+    {
+        for (int i = 0; i < NUMBER_OF_LINES_IN_BUFFER; ++i)
+            global::buffers[global::number_of_buffers].lines[i].initialize();
+
+        auto result = global::buffers + global::number_of_buffers;
+        global::number_of_buffers++;
+
+        return result;
+    }
+
     bool buffer::insert_character(uint8 character)
     {
         auto succeeded = false;

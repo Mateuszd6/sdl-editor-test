@@ -3,71 +3,6 @@
 
 #include "config.h"
 
-// TODO(Cleanup): remove from here as many as possible.
-#include "gap_buffer.hpp"
-#include "editor/buffer.hpp"
-
-// TODO(Cleaup): Only for unity build.
-#include "gap_buffer.cpp"
-#include "editor/buffer.cpp"
-
-enum WindowSplit { WIN_SPLIT_VERTCAL, WIN_SPLIT_HORIZONTAL };
-enum WindowTraverseMode { WIN_TRAVERSE_FORWARD, WIN_TRAVERSE_BACKWARDS };
-
-struct Rect
-{
-    int x;
-    int y;
-    int width;
-    int height;
-};
-
-#define MAX_WINDOWS_ON_SPLIT (10)
-#define MIN_PERCANTAGE_WINDOW_SPLIT (0.2f)
-
-struct EditorWindow
-{
-    // If 0, window is splited to multiple windows, either vertically or
-    // horizontally. Otherwise pointer to buffer, that is displayed in window is
-    // stored.
-    int contains_buffer;
-
-    // A pointer to the splitting window, which owns this one, or
-    // nullptr, if this is a top window. (If nullptr, there should be
-    // only one window in the screen (expect minibuffer)).
-    EditorWindow *parent_ptr;
-
-    // This must be updated after every window resize.
-    Rect position;
-
-    union
-    {
-        struct // If contains single buffer:
-        {
-            editor::buffer *buffer_ptr;
-        };
-        struct // If is splited into multiple windows:
-        {
-            WindowSplit split;
-            // Must be < MAX_WINDOWS_ON_SPLI and >= 2
-            int number_of_windows;
-            // Splits percentages must be increasing and in range 0-1.
-            float splits_percentages[MAX_WINDOWS_ON_SPLIT - 1];
-            EditorWindow *split_windows[MAX_WINDOWS_ON_SPLIT];
-        };
-    };
-
-    void SplitWindow(WindowSplit split_type);
-    void UpdateSize(Rect new_rect);
-    void Redraw(bool current_select) const;
-    int GetIndexInParent() const;
-    bool IsFirstInParent() const;
-    bool IsLastInParent() const;
-
-    int GetDimForSplitType(WindowSplit split_type) const;
-    float GetScreenPercForSplitType(WindowSplit split_type) const;
-};
-
 // TODO(Cleanup): Try to use as less globals as possible...
 namespace global
 {
@@ -87,291 +22,26 @@ namespace global
     static SDL_Surface *alphabet['z' - 'a' + 1];
     static SDL_Surface *text_surface[number_of_surfaces];
 
-    static const auto font_size = 13.f;
-
-    // Window at index 0 is main window, created on init and it cannot be
-    // removed. TODO(Testing): Make these auto-resizable and think about initial size.
-    static int number_of_windows = 0;
-    static EditorWindow windows_arr[256];
-    static int number_of_buffers = 0;
-    static editor::buffer buffers[256];
-
-    // Index of window that displays currently selected buffer.
-    static int current_window_idx;
-
-    // Index of active window before entering minibuffer.
-    // TODO(Cleanup): Default value.
-    static int window_idx_before_entering_minibuffer;
+    static auto font_size = 13.f;
 }
 
-// TODO(Splitting lines): Remove unused atrribute!
-__attribute__ ((unused))
-static void DrawSplittingLine(const Rect &rect)
-{
-    auto split_line = SDL_Rect { rect.x, rect.y, rect.width, rect.height };
-    SDL_FillRect(global::screen, &split_line, 0x000000); // 0x64645e
-}
+// TODO(Cleanup): remove from here as many as possible.
+#include "gap_buffer.hpp"
+#include "editor/buffer.hpp"
+#include "editor/window.hpp"
+#include "graphics/graphics.hpp"
 
-static editor::buffer *CreateNewBuffer()
-{
-    for (int i = 0; i < NUMBER_OF_LINES_IN_BUFFER; ++i)
-        global::buffers[global::number_of_buffers].lines[i].initialize();
-
-    auto result = global::buffers + global::number_of_buffers;
-    global::number_of_buffers++;
-    return result;
-}
-
-static EditorWindow *CreateNewWindowWithBuffer(editor::buffer *buffer,
-                                               EditorWindow *root_window)
-{
-    global::windows_arr[global::number_of_windows++] =
-        EditorWindow
-        {
-            .contains_buffer = 1,
-            .buffer_ptr = buffer,
-            .parent_ptr = root_window
-        };
-
-    return global::windows_arr + global::number_of_windows - 1;
-}
-
-int EditorWindow::GetIndexInParent() const
-{
-    auto result = -1;
-    for (auto i = 0; i < parent_ptr->number_of_windows; ++i)
-        if (parent_ptr->split_windows[i] == this)
-        {
-            result = i;
-            break;
-        }
-    ASSERT(result >= 0);
-    return result;
-}
-
-int EditorWindow::GetDimForSplitType(WindowSplit split_type) const
-{
-    switch (split_type)
-    {
-        case WIN_SPLIT_VERTCAL:
-            return position.height;
-        case WIN_SPLIT_HORIZONTAL:
-            return position.width;
-
-        default:
-            UNREACHABLE();
-    }
-}
-
-float EditorWindow::GetScreenPercForSplitType(WindowSplit split_type) const
-{
-    switch (split_type)
-    {
-        case WIN_SPLIT_VERTCAL:
-            return static_cast<float>(position.height) / global::window_h;
-        case WIN_SPLIT_HORIZONTAL:
-            return static_cast<float>(position.width) / global::window_w;
-
-        default:
-            UNREACHABLE();
-    }
-}
-
-bool EditorWindow::IsFirstInParent() const
-{
-    return (parent_ptr->split_windows[0] == this);
-}
-
-bool EditorWindow::IsLastInParent() const
-{
-    return (parent_ptr->split_windows[parent_ptr->number_of_windows - 1] == this);
-}
-
-// NOTE: This window must contain buffer!
-// NOTE: This heavily assumes that this window is the active one.
-// This focus is set to the buffer that is in the window before the split.
-void EditorWindow::SplitWindow(WindowSplit split_type)
-{
-    // We won't let user split the window, if one of the windows takes less than
-    // the min size of the window.
-    auto split_h_or_v = (split_type == WIN_SPLIT_VERTCAL
-                         ? static_cast<float>(position.height) / global::window_h
-                         : static_cast<float>(position.width) / global::window_w);
-
-    if (split_h_or_v < MIN_PERCANTAGE_WINDOW_SPLIT * 2)
-    {
-        LOG_ERROR("Cannot split. The window is too small");
-        return;
-    }
-
-    if (contains_buffer)
-    {
-        auto new_buffer = CreateNewBuffer();
-        auto previous_buffer_ptr = buffer_ptr;
-
-        // parent_ptr cannot contain buffer!
-        ASSERT(!parent_ptr || !parent_ptr->contains_buffer);
-
-        if (!parent_ptr || parent_ptr->split != split_type)
-        {
-            // We must create new window, which holds these two:
-            split = split_type;
-            splits_percentages[0] = 0.5f;
-            splits_percentages[1] = 1.0f;
-            split_windows[0] = CreateNewWindowWithBuffer(previous_buffer_ptr, this);
-            split_windows[1] = CreateNewWindowWithBuffer(new_buffer, this);
-            number_of_windows = 2;
-            global::current_window_idx = split_windows[0] - global::windows_arr;
-            contains_buffer = 0;
-            UpdateSize(position);
-        }
-        else
-        {
-            // TODO(Cleanup): Make sure that this assertion won't fire.
-            ASSERT(parent_ptr->number_of_windows < MAX_WINDOWS_ON_SPLIT - 1);
-
-            auto idx_in_parent = GetIndexInParent();
-
-            // Move windows with bigger index by one in the array.
-            for (auto i = parent_ptr->number_of_windows;
-                 i >= idx_in_parent + 1;
-                 --i)
-            {
-                parent_ptr->split_windows[i] = parent_ptr->split_windows[i-1];
-                parent_ptr->splits_percentages[i] = parent_ptr->splits_percentages[i-1];
-            }
-            parent_ptr->split_windows[idx_in_parent + 1] =
-                CreateNewWindowWithBuffer(new_buffer, parent_ptr);
-
-            // Calculate the split which is half between split percent under
-            // index of THIS buffer, and the next one nad insert new window with
-            // buffer 'new_buffer' there.
-            auto previous_split = (idx_in_parent == 0
-                                   ? 0
-                                   : parent_ptr->splits_percentages[idx_in_parent - 1]);
-            auto split_perct =
-                (parent_ptr->splits_percentages[idx_in_parent] + previous_split) / 2;
-            parent_ptr->splits_percentages[idx_in_parent] = split_perct;
-
-            // We can safetly increment this, becasue of the check above.
-            parent_ptr->number_of_windows++;
-
-            // TODO(Cleanup): i think this should be false, because parent must
-            // be split window (does not contain a single buffer), and therefore
-            // cannot be selected.
-            parent_ptr->UpdateSize(parent_ptr->position);
-            parent_ptr->Redraw(false);
-        }
-    }
-    else
-        PANIC("This windows cannot be splited and should never ever be focused!");
-}
-
-// TODO(Cleanup): Summary
-void EditorWindow::UpdateSize(Rect new_rect)
-{
-    position = new_rect;
-
-    // If windows contains multiple windows, we must update their size first.
-    if (!contains_buffer)
-    {
-        // Tells at which pixel one of the windows in the split ends.
-        // In range of (min_pos - max_pos);
-        int split_idx[MAX_WINDOWS_ON_SPLIT];
-
-        ASSERT(number_of_windows >= 2);
-
-        for (auto i = 0; i < number_of_windows-1; ++i)
-            ASSERT(splits_percentages[i] > 0 &&
-                   splits_percentages[i] < 1 &&
-                   (i < number_of_windows-2
-                    ? splits_percentages[i] < splits_percentages[i+1]
-                    : 1));
-
-        auto min_pos = (split == WindowSplit::WIN_SPLIT_HORIZONTAL
-                        ? position.x : position.y);
-        auto max_pos = (split == WindowSplit::WIN_SPLIT_HORIZONTAL
-                        ? position.x + position.width : position.y + position.height);
-        auto difference = max_pos - min_pos;
-        ASSERT(difference > 0);
-
-        for (auto i = 0; i < number_of_windows-1; ++i)
-        {
-            split_idx[i] =
-                min_pos + static_cast<int>(splits_percentages[i] * difference);
-
-            // TODO(Splitting lines): Mayby just handle them as part of the buffer?
-            // There is a one pixel space for splitting line.
-            if (i > 0)
-                split_idx[i] += 1;
-
-            ASSERT(min_pos < split_idx[i] && split_idx[i] < max_pos);
-        }
-        split_idx[number_of_windows-1] = max_pos;
-
-        auto previous_split = min_pos;
-        for (auto i = 0; i < number_of_windows; ++i)
-        {
-            auto nested_window_rect =
-                (split == WindowSplit::WIN_SPLIT_HORIZONTAL
-                 ? Rect { previous_split, position.y,
-                        split_idx[i]-previous_split, position.height }
-                 : Rect { position.x, previous_split,
-                           position.width, split_idx[i]-previous_split });
-
-#if 1
-            // TODO(Profiling): Move outside the loop for better performace?
-            if (i < number_of_windows - 1)
-            {
-                auto splitting_rect =
-                    (split == WindowSplit::WIN_SPLIT_HORIZONTAL
-                     ? Rect {
-                        split_idx[i], nested_window_rect.y,
-                            1, nested_window_rect.height
-                            }
-                     : Rect {
-                        nested_window_rect.x, split_idx[i],
-                            nested_window_rect.width, 1
-                            });
-
-                DrawSplittingLine(splitting_rect);
-            }
-#endif // 0
-
-            // Add 1 becasue this is a space for the line separator.
-            previous_split = split_idx[i]+1;
-            split_windows[i]->UpdateSize(nested_window_rect);
-        }
-    }
-}
-
-void EditorWindow::Redraw(bool current_select) const
-{
-    if (contains_buffer)
-    {
-        auto sdl_rect = SDL_Rect {
-            position.x, position.y,
-            position.width, position.height
-        };
-
-        SDL_FillRect(global::screen,
-                     &sdl_rect,
-                     current_select ? 0x272822 : 0x171812);
-
-    }
-    else
-        for (auto i = 0; i < number_of_windows; ++i)
-        {
-            split_windows[i]->Redraw(global::current_window_idx ==
-                                     (split_windows[i] - global::windows_arr));
-        }
-}
+// TODO(Cleaup): Only for unity build.
+#include "gap_buffer.cpp"
+#include "editor/buffer.cpp"
+#include "editor/window.cpp"
+#include "graphics/graphics.cpp"
 
 namespace editor_window_utility
 {
     namespace detail
     {
-        static void ResizeIthWindowLeft(EditorWindow* parent_window,
+        static void ResizeIthWindowLeft(editor::window* parent_window,
                                         int index_in_parent)
         {
             // Cannot be 0, because we move left.
@@ -385,10 +55,10 @@ namespace editor_window_utility
                                ? parent_window->splits_percentages[index_in_parent - 2]
                                : 0.0f);
 
-            // This does not work, because nester windows spoit them a lot.
+            // This does not work, because nested windows spoit them a lot.
 #if 0
             if (parent_window->split_windows[index_in_parent - 1]
-                ->GetScreenPercForSplitType(WindowSplit::WIN_SPLIT_HORIZONTAL) >= 0.2f)
+                ->GetScreenPercForSplitType(window_split::WIN_SPLIT_HORIZONTAL) >= 0.2f)
 #endif
 
                 if (parent_window->splits_percentages[index_in_parent - 1] - prev_split
@@ -402,7 +72,7 @@ namespace editor_window_utility
                     LOG_WARN("Left window is too small!!");
         }
 
-        static void ResizeIthWindowRight(EditorWindow* parent_window,
+        static void ResizeIthWindowRight(editor::window* parent_window,
                                          int index_in_parent)
         {
 
@@ -433,18 +103,18 @@ namespace editor_window_utility
     // TODO: Find better name.
     // TODO: Remove unused atrribute!
     __attribute__ ((unused))
-    static void ResizeWindowAux(EditorWindow* curr_window,
-                                WindowSplit split_type,
-                                WindowTraverseMode direction)
+    static void ResizeWindowAux(editor::window* curr_window,
+                                editor::window_split split_type,
+                                editor::window_traverse_mode direction)
     {
         // TODO(Cleaup): Explain.
         auto right_parent = curr_window->parent_ptr;
         auto child = curr_window;
         while(right_parent
               && (right_parent->split != split_type
-                  || (direction == WindowTraverseMode::WIN_TRAVERSE_BACKWARDS
+                  || (direction == editor::window_traverse_mode::WIN_TRAVERSE_BACKWARDS
                       &&  child->IsFirstInParent())
-                  || (direction == WindowTraverseMode::WIN_TRAVERSE_FORWARD
+                  || (direction == editor::window_traverse_mode::WIN_TRAVERSE_FORWARD
                       && child->IsLastInParent())))
         {
             ASSERT(!right_parent->contains_buffer);
@@ -472,10 +142,10 @@ namespace editor_window_utility
 
         switch(direction)
         {
-            case (WindowTraverseMode::WIN_TRAVERSE_BACKWARDS):
+            case (editor::window_traverse_mode::WIN_TRAVERSE_BACKWARDS):
                 detail::ResizeIthWindowLeft(right_parent, index_in_parent);
                 break;
-            case (WindowTraverseMode::WIN_TRAVERSE_FORWARD):
+            case (editor::window_traverse_mode::WIN_TRAVERSE_FORWARD):
                 detail::ResizeIthWindowRight(right_parent, index_in_parent);
                 break;
 
@@ -488,45 +158,44 @@ namespace editor_window_utility
 // TODO(Cleanup): Would be nice to add them using regular, add-window/buffer API.
 static void InitializeFirstWindow()
 {
-    global::number_of_buffers = 2;
-    global::buffers[0] = {}; // TODO(Next): Initailize buffers.
-    // minibufer.
-    global::buffers[1] = {}; // TODO(Next): Initailize buffers.
+    editor::global::number_of_buffers = 2;
+    editor::global::buffers[0] = {}; // TODO(Next): Initailize buffers.
 
-    global::number_of_windows = 2;
+    // minibufer.
+    editor::global::buffers[1] = {}; // TODO(Next): Initailize buffers.
+
+    editor::global::number_of_windows = 2;
 
     // Window with index 0 contains minibuffer. And is drawn separetely.
-    global::windows_arr[0] = EditorWindow {
+    editor::global::windows_arr[0] = editor::window {
         .contains_buffer = 1,
-        .buffer_ptr = global::buffers,
+        .buffer_ptr = editor::global::buffers,
         .parent_ptr = nullptr,
-        .position = Rect { 0, global::window_h - 17 +1, global::window_w, 17 }
+        .position = graphics::rectangle { 0, global::window_h - 17 +1, global::window_w, 17 }
     };
 
     // Window with index 1 is main window.
-    global::windows_arr[1] = EditorWindow {
+    editor::global::windows_arr[1] = editor::window {
         .contains_buffer = 1,
-        .buffer_ptr = global::buffers + 1,
+        .buffer_ptr = editor::global::buffers + 1,
         .parent_ptr = nullptr,
-        .position = Rect { 0, 0, global::window_w, global::window_h - 17 }
+        .position = graphics::rectangle { 0, 0, global::window_w, global::window_h - 17 }
     };
 
-    global::current_window_idx = 1;
+    editor::global::current_window_idx = 1;
 }
 
 // TODO(Cleanup): Create namespace application and move resize and redraw window
 //                functions and all globals there!
-// TODO(Cleanup): Check if something here can fail,
-//                if not change the type to void.
+// TODO(Cleanup): Check if something here can fail, if not change the type to
+//                void.
 static int ResizeWindow()
 {
-    global::windows_arr[0].UpdateSize(Rect {
-            0, global::window_h - 17 +1, global::window_w, 17
-                });
+    editor::global::windows_arr[0]
+        .UpdateSize(graphics::rectangle {0, global::window_h - 17 + 1, global::window_w, 17 });
 
-    global::windows_arr[1].UpdateSize(Rect {
-            0, 0, global::window_w, global::window_h - 17
-                });
+    editor::global::windows_arr[1]
+        .UpdateSize(graphics::rectangle {0, 0, global::window_w, global::window_h - 17 });
 
     return 0;
 }
@@ -581,7 +250,7 @@ static void InitTextGlobalSutff()
     font_test = nullptr;
 }
 
-static void PrintTextLine(EditorWindow const* window_ptr,
+static void PrintTextLine(editor::window const* window_ptr,
                           int line_nr, // First visible line of the buffer is 0.
                           char const* text,
                           int cursor_idx) // gap_buffer const* line
@@ -616,7 +285,7 @@ static void PrintTextLine(EditorWindow const* window_ptr,
     {
         auto rect = SDL_Rect {
             window_ptr->position.x + 2 +
-                global::alphabet[static_cast<int>('a')]->w * cursor_idx,
+            global::alphabet[static_cast<int>('a')]->w * cursor_idx,
             window_ptr->position.y + 2 + global::text_surface[0]->h * line_nr,
             2,
             global::alphabet[static_cast<int>('a')]->h
@@ -626,7 +295,7 @@ static void PrintTextLine(EditorWindow const* window_ptr,
     }
 }
 
-static void PrintTextLineFromGapBuffer(EditorWindow const* window_ptr,
+static void PrintTextLineFromGapBuffer(editor::window const* window_ptr,
                                        int line_nr, // First visible line of the buffer is 0.
                                        gap_buffer const* line,
                                        int current_idx)
@@ -637,7 +306,7 @@ static void PrintTextLineFromGapBuffer(EditorWindow const* window_ptr,
                   reinterpret_cast<char const*>(text),
                   current_idx);
 
-#if 0
+#if 0 // Debug stuff.
     system("clear");
     line->DEBUG_print_state();
 #endif
@@ -663,27 +332,27 @@ static int RedrawWindow()
     if (global::window_w == 0 || global::window_h == 0)
         PANIC("Size is 0!");
 
-    ASSERT(global::number_of_windows > 0);
-    auto main_window = (global::windows_arr + 1);
-    auto mini_buffer_window = (global::windows_arr + 0);
+    ASSERT(editor::global::number_of_windows > 0);
+    auto main_window = (editor::global::windows_arr + 1);
+    auto mini_buffer_window = (editor::global::windows_arr + 0);
 
     // TODO(Splitting lines): Decide how i want to draw them.
 #if 1
-    DrawSplittingLine({ 0, global::window_h - 17, global::window_w, 1 });
+    graphics::DrawSplittingLine({ 0, global::window_h - 17, global::window_w, 1 });
 #endif
 
-    mini_buffer_window->Redraw(global::current_window_idx == 0);
-    main_window->Redraw(global::current_window_idx == 1);
+    mini_buffer_window->Redraw(editor::global::current_window_idx == 0);
+    main_window->Redraw(editor::global::current_window_idx == 1);
 
-    if (!(global::windows_arr + 1)->contains_buffer)
+    if (!(editor::global::windows_arr + 1)->contains_buffer)
     {
-        if ((global::windows_arr + 2)->contains_buffer
-            && (global::windows_arr + 4)->contains_buffer
-            && (global::windows_arr + 5)->contains_buffer)
+        if ((editor::global::windows_arr + 2)->contains_buffer
+            && (editor::global::windows_arr + 4)->contains_buffer
+            && (editor::global::windows_arr + 5)->contains_buffer)
         {
-            auto left_w = global::windows_arr + 2;
-            auto right_w = global::windows_arr + 4;
-            auto gap_w = global::windows_arr + 5;
+            auto left_w = editor::global::windows_arr + 2;
+            auto right_w = editor::global::windows_arr + 4;
+            auto gap_w = editor::global::windows_arr + 5;
 
             PrintTextLine(left_w, 0, "#include <iostream>", -1);
             PrintTextLine(left_w, 2, "int main()", -1);
@@ -701,15 +370,14 @@ static int RedrawWindow()
             PrintTextLine(right_w, 5, "  </body>", -1);
             PrintTextLine(right_w, 6, "</html>", -1);
 
-
-            for (auto i = 0ULL; i < 128ULL; ++i)
+            for (auto i = 0_u64; i < 128_u64; ++i)
             {
                 PrintTextLineFromGapBuffer(gap_w,
                                            i,
                                            gap_w->buffer_ptr->lines + i,
                                            (gap_w->buffer_ptr->curr_line == i
-                                                ? gap_w->buffer_ptr->curr_index
-                                                : -1));
+                                            ? gap_w->buffer_ptr->curr_index
+                                            : -1));
             }
         }
     }
@@ -721,8 +389,8 @@ static int RedrawWindow()
 // If traverse is forward, we pick the first window in the subtree of the
 // root_window, otherwise we pick the last one (we always go either left or
 // right recusively).
-static EditorWindow *GetFirstOrLastWindowInSubtree(EditorWindow* root_window,
-                                                   WindowTraverseMode traverse)
+static editor::window *GetFirstOrLastWindowInSubtree(editor::window* root_window,
+                                                     editor::window_traverse_mode traverse)
 {
     // If root window is a bufer, it is just selected.
     if (root_window->contains_buffer)
@@ -731,11 +399,11 @@ static EditorWindow *GetFirstOrLastWindowInSubtree(EditorWindow* root_window,
     auto next_window = root_window;
     auto window_to_pick_idx = 0;
 
-    if (traverse == WindowTraverseMode::WIN_TRAVERSE_FORWARD)
+    if (traverse == editor::window_traverse_mode::WIN_TRAVERSE_FORWARD)
         window_to_pick_idx = 0;
     else
     {
-        ASSERT (traverse == WindowTraverseMode::WIN_TRAVERSE_BACKWARDS);
+        ASSERT (traverse == editor::window_traverse_mode::WIN_TRAVERSE_BACKWARDS);
         window_to_pick_idx = next_window->number_of_windows - 1;
     }
 
@@ -745,19 +413,19 @@ static EditorWindow *GetFirstOrLastWindowInSubtree(EditorWindow* root_window,
     return next_window;
 }
 
-static EditorWindow *GetNextOrPrevActiveWindow(const EditorWindow *current_window,
-                                               const WindowTraverseMode traverse)
+static editor::window *GetNextOrPrevActiveWindow(editor::window const*current_window,
+                                                 editor::window_traverse_mode traverse)
 {
     auto parent = current_window->parent_ptr;
     if (!parent)
-        return GetFirstOrLastWindowInSubtree(global::windows_arr + 1, traverse);
+        return GetFirstOrLastWindowInSubtree(editor::global::windows_arr + 1, traverse);
 
     // Parent must be splited window.
     ASSERT(!parent->contains_buffer);
     auto idx_in_parent = current_window->GetIndexInParent();
 
     // TODO(Cleanup): Compress this better!
-    if (traverse == WindowTraverseMode::WIN_TRAVERSE_FORWARD)
+    if (traverse == editor::window_traverse_mode::WIN_TRAVERSE_FORWARD)
     {
         if (idx_in_parent + 1 >= parent->number_of_windows)
         {
@@ -776,7 +444,7 @@ static EditorWindow *GetNextOrPrevActiveWindow(const EditorWindow *current_windo
     }
     else
     {
-        ASSERT(traverse == WindowTraverseMode::WIN_TRAVERSE_BACKWARDS);
+        ASSERT(traverse == editor::window_traverse_mode::WIN_TRAVERSE_BACKWARDS);
         if (idx_in_parent == 0)
         {
             // First window in this split - we must go to the parent window and
@@ -796,9 +464,9 @@ static EditorWindow *GetNextOrPrevActiveWindow(const EditorWindow *current_windo
 
 // If go_forward is true we switch to the next widnow, otherwise we switch to
 // the previous one.
-static void SwitchWindow(const WindowTraverseMode traverse)
+static void SwitchWindow(editor::window_traverse_mode traverse)
 {
-    if (global::current_window_idx == 0)
+    if (editor::global::current_window_idx == 0)
     {
         LOG_WARN("Cannot switch window in minibuffer!");
         return;
@@ -806,41 +474,41 @@ static void SwitchWindow(const WindowTraverseMode traverse)
 
     // TODO(Cleanup): Do we assume there is at least one buffer at a time?
     // TODO(Cleanup): What if there is just minibuffer?
-    ASSERT(global::number_of_buffers);
+    ASSERT(editor::global::number_of_buffers);
 
     auto next_window =
-        GetNextOrPrevActiveWindow(global::windows_arr + global::current_window_idx,
+        GetNextOrPrevActiveWindow(editor::global::windows_arr + editor::global::current_window_idx,
                                   traverse);
     ASSERT(next_window);
-    global::current_window_idx = next_window - global::windows_arr;
+    editor::global::current_window_idx = next_window - editor::global::windows_arr;
 }
 
 // TODO: Remove unused atrribute!
 __attribute__ ((unused))
 static void SwitchToMiniBuffer()
 {
-    if (global::current_window_idx == 0)
+    if (editor::global::current_window_idx == 0)
     {
         LOG_WARN("Already in minibuffer");
         return;
     }
 
-    global::window_idx_before_entering_minibuffer = global::current_window_idx;
-    global::current_window_idx = 0;
+    editor::global::window_idx_before_entering_minibuffer = editor::global::current_window_idx;
+    editor::global::current_window_idx = 0;
 }
 
 // TODO: Remove unused atrribute!
 __attribute__ ((unused))
 static void SwitchOutFromMiniBuffer()
 {
-    if (global::current_window_idx != 0)
+    if (editor::global::current_window_idx != 0)
     {
         LOG_WARN("Not in minibuffer");
         return;
     }
 
-    global::current_window_idx
-        = global::window_idx_before_entering_minibuffer;
+    editor::global::current_window_idx
+        = editor::global::window_idx_before_entering_minibuffer;
 }
 
 static int HandleEvent(const SDL_Event &event)
@@ -861,12 +529,12 @@ static int HandleEvent(const SDL_Event &event)
             // W - Switch window.
             if (event.key.keysym.sym == 119)
             {
-                SwitchWindow(WindowTraverseMode::WIN_TRAVERSE_FORWARD);
+                SwitchWindow(window_traverse_mode::WIN_TRAVERSE_FORWARD);
             }
             // Q - Switch window backwards.
             else if (event.key.keysym.sym == 113)
             {
-                SwitchWindow(WindowTraverseMode::WIN_TRAVERSE_BACKWARDS);
+                SwitchWindow(window_traverse_mode::WIN_TRAVERSE_BACKWARDS);
             }
 
             // [<-] - Move left current window border.
@@ -875,8 +543,8 @@ static int HandleEvent(const SDL_Event &event)
                 auto curr_window = (global::windows_arr + global::current_window_idx);
                 editor_window_utility
                     ::ResizeWindowAux(curr_window,
-                                      WindowSplit::WIN_SPLIT_HORIZONTAL,
-                                      WindowTraverseMode::WIN_TRAVERSE_BACKWARDS);
+                                      window_split::WIN_SPLIT_HORIZONTAL,
+                                      window_traverse_mode::WIN_TRAVERSE_BACKWARDS);
             }
 
             // [->] - Move right current window border.
@@ -885,8 +553,8 @@ static int HandleEvent(const SDL_Event &event)
                 auto curr_window = (global::windows_arr + global::current_window_idx);
                 editor_window_utility
                     ::ResizeWindowAux(curr_window,
-                                      WindowSplit::WIN_SPLIT_HORIZONTAL,
-                                      WindowTraverseMode::WIN_TRAVERSE_FORWARD);
+                                      window_split::WIN_SPLIT_HORIZONTAL,
+                                      window_traverse_mode::WIN_TRAVERSE_FORWARD);
             }
 
             // [v] - Move down current window border.
@@ -895,8 +563,8 @@ static int HandleEvent(const SDL_Event &event)
                 auto curr_window = (global::windows_arr + global::current_window_idx);
                 editor_window_utility
                     ::ResizeWindowAux(curr_window,
-                                      WindowSplit::WIN_SPLIT_VERTCAL,
-                                      WindowTraverseMode::WIN_TRAVERSE_FORWARD);
+                                      window_split::WIN_SPLIT_VERTCAL,
+                                      window_traverse_mode::WIN_TRAVERSE_FORWARD);
             }
 
             // [^] - Move up current window border.
@@ -905,8 +573,8 @@ static int HandleEvent(const SDL_Event &event)
                 auto curr_window = (global::windows_arr + global::current_window_idx);
                 editor_window_utility
                     ::ResizeWindowAux(curr_window,
-                                      WindowSplit::WIN_SPLIT_VERTCAL,
-                                      WindowTraverseMode::WIN_TRAVERSE_BACKWARDS);
+                                      window_split::WIN_SPLIT_VERTCAL,
+                                      window_traverse_mode::WIN_TRAVERSE_BACKWARDS);
             }
 
 
@@ -927,7 +595,7 @@ static int HandleEvent(const SDL_Event &event)
                 if (global::current_window_idx != 0)
                 {
                     global::windows_arr[global::current_window_idx].
-                        SplitWindow(WindowSplit::WIN_SPLIT_HORIZONTAL);
+                        SplitWindow(window_split::WIN_SPLIT_HORIZONTAL);
                 }
                 else
                 {
@@ -940,7 +608,7 @@ static int HandleEvent(const SDL_Event &event)
                 if (global::current_window_idx != 0)
                 {
                     global::windows_arr[global::current_window_idx].
-                        SplitWindow(WindowSplit::WIN_SPLIT_VERTCAL);
+                        SplitWindow(window_split::WIN_SPLIT_VERTCAL);
                 }
                 else
                     LOG_WARN("Cannot split minibuffer");
@@ -1136,31 +804,31 @@ static int HandleEvent(const SDL_Event &event)
             auto succeeded = false;
             if (character != '\0')
             {
-                (global::windows_arr + 5)->buffer_ptr->insert_character(character);
+                (editor::global::windows_arr + 5)->buffer_ptr->insert_character(character);
             }
             else if (arrow == 1)
             {
-                (global::windows_arr + 5)->buffer_ptr->move_forward_curr_line();
+                (editor::global::windows_arr + 5)->buffer_ptr->move_forward_curr_line();
             }
             else if (arrow == 2)
             {
-                (global::windows_arr + 5)->buffer_ptr->move_backward_curr_line();
+                (editor::global::windows_arr + 5)->buffer_ptr->move_backward_curr_line();
             }
             else if (arrow == 3)
             {
-                (global::windows_arr + 5)->buffer_ptr->move_line_up();
+                (editor::global::windows_arr + 5)->buffer_ptr->move_line_up();
             }
             else if (arrow == 4)
             {
-                (global::windows_arr + 5)->buffer_ptr->move_line_down();
+                (editor::global::windows_arr + 5)->buffer_ptr->move_line_down();
             }
             else if (backspace)
             {
-                (global::windows_arr + 5)->buffer_ptr->delete_char_at_cursor_backward();
+                (editor::global::windows_arr + 5)->buffer_ptr->delete_char_at_cursor_backward();
             }
             else if (del)
             {
-                (global::windows_arr + 5)->buffer_ptr->delete_char_at_cursor_forward();
+                (editor::global::windows_arr + 5)->buffer_ptr->delete_char_at_cursor_forward();
             }
 
             if (!succeeded)
@@ -1246,13 +914,13 @@ static int HandleEvent(const SDL_Event &event)
                 case SDL_WINDOWEVENT_FOCUS_GAINED:
                 {
                     LOG_INFO("MSG ---> Window %d gained keyboard focus",
-                            event.window.windowID);
+                             event.window.windowID);
                 } break;
 
                 case SDL_WINDOWEVENT_FOCUS_LOST:
                 {
                     LOG_INFO("MSG ---> Window %d lost keyboard focus",
-                            event.window.windowID);
+                             event.window.windowID);
                 } break;
 
                 case SDL_WINDOWEVENT_CLOSE:
@@ -1317,7 +985,7 @@ static int InitWindow(const int width, const int height)
                                       SDL_WINDOWPOS_UNDEFINED,
                                       SDL_WINDOWPOS_UNDEFINED,
                                       width, height, 0);
-                                      // 0, 0, 0); // To test corner-cases.
+    // 0, 0, 0); // To test corner-cases.
 
     if (!global::window)
     {
@@ -1339,7 +1007,7 @@ static int InitWindow(const int width, const int height)
 
 // Makes sure that the main window tree is done correctly. Inside horizontal
 // split window cannot be another horizontal etc...
-static bool Validate(EditorWindow *window)
+static bool Validate(editor::window *window)
 {
     if (window->contains_buffer)
         return true;
@@ -1361,15 +1029,15 @@ static bool Validate(EditorWindow *window)
 
 // TODO: Remove unused atrribute!
 __attribute__ ((unused))
-static void DEBUG_PrintWindowsState(const EditorWindow *window)
+static void DEBUG_PrintWindowsState(const editor::window *window)
 {
     if (!window)
         printf(" (nullptr) ");
     else if (window->contains_buffer)
-        printf(" (Buffer: %ld) ", window->buffer_ptr - global::buffers);
+        printf(" (Buffer: %ld) ", window->buffer_ptr - editor::global::buffers);
     else
     {
-        printf(" (%c){ ", (window->split == WindowSplit::WIN_SPLIT_HORIZONTAL ? 'H' : 'V'));
+        printf(" (%c){ ", (window->split == editor::window_split::WIN_SPLIT_HORIZONTAL ? 'H' : 'V'));
         for(auto i = 0; i < window->number_of_windows; ++i)
             DEBUG_PrintWindowsState(window->split_windows[i]);
         printf("} ");
@@ -1414,12 +1082,12 @@ int main(void)
     InitializeFirstWindow();
 
 #if 1
-    global::windows_arr[global::current_window_idx]
-        .SplitWindow(WindowSplit::WIN_SPLIT_HORIZONTAL);
-    SwitchWindow(WindowTraverseMode::WIN_TRAVERSE_FORWARD);
-    global::windows_arr[global::current_window_idx]
-        .SplitWindow(WindowSplit::WIN_SPLIT_VERTCAL);
-    SwitchWindow(WindowTraverseMode::WIN_TRAVERSE_FORWARD);
+    editor::global::windows_arr[editor::global::current_window_idx]
+        .SplitWindow(editor::window_split::WIN_SPLIT_HORIZONTAL);
+    SwitchWindow(editor::window_traverse_mode::WIN_TRAVERSE_FORWARD);
+    editor::global::windows_arr[editor::global::current_window_idx]
+        .SplitWindow(editor::window_split::WIN_SPLIT_VERTCAL);
+    SwitchWindow(editor::window_traverse_mode::WIN_TRAVERSE_FORWARD);
 #endif
 
     InitTextGlobalSutff();
@@ -1438,15 +1106,15 @@ int main(void)
             break;
 
         static auto diff = 0.01f;
-        global::windows_arr[0].splits_percentages[0] += diff;
-        if (global::windows_arr[0].splits_percentages[0] > 0.9f)
+        editor::global::windows_arr[0].splits_percentages[0] += diff;
+        if (editor::global::windows_arr[0].splits_percentages[0] > 0.9f)
         {
-            global::windows_arr[0].splits_percentages[0] = 0.9f;
+            editor::global::windows_arr[0].splits_percentages[0] = 0.9f;
             diff *= -1;
         }
-        else if (global::windows_arr[0].splits_percentages[0] < 0.1f)
+        else if (editor::global::windows_arr[0].splits_percentages[0] < 0.1f)
         {
-            global::windows_arr[0].splits_percentages[0] = 0.1f;
+            editor::global::windows_arr[0].splits_percentages[0] = 0.1f;
             diff *= -1;
         }
 
@@ -1456,7 +1124,7 @@ int main(void)
 
 #ifdef DEBUG
         // Validate main window tree structure.
-        ASSERT(Validate(global::windows_arr + 1));
+        ASSERT(Validate(editor::global::windows_arr + 1));
 #endif
 
         // Some printing stuff:

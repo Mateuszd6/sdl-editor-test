@@ -1,3 +1,6 @@
+#ifndef __CONFIG_H_INCLUDED__
+#define __CONFIG_H_INCLUDED__
+
 #include <cstdint>
 #include <stdio.h>
 
@@ -31,3 +34,5 @@ int32 operator"" _i32(unsigned long long liter) { return static_cast<int32>(lite
 uint32 operator"" _u32(unsigned long long liter) { return static_cast<uint32>(liter); }
 int64 operator"" _i64(unsigned long long liter) { return static_cast<int64>(liter); }
 uint64 operator"" _u64(unsigned long long liter) { return static_cast<uint64>(liter); }
+
+#endif // __CONFIG_H_INCLUDED__
