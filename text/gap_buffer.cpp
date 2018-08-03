@@ -1,7 +1,7 @@
 #include <cstdlib>
 #include <cstring>
 
-#include "config.h"
+#include "../config.h"
 
 // TODO(Cleaup): This should be removed by the cleaup, or ;
 uint8 const* gap_buffer::to_c_str() const

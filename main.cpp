@@ -1,14 +1,14 @@
 #include "config.h"
 
 // TODO(Cleanup): remove from here as many as possible.
-#include "gap_buffer.hpp"
+#include "text/gap_buffer.hpp"
 #include "editor/buffer.hpp"
 #include "editor/window.hpp"
 #include "graphics/graphics.hpp"
 #include "platfrom/platform.hpp"
 
 // TODO(Cleaup): Only for unity build.
-#include "gap_buffer.cpp"
+#include "text/gap_buffer.cpp"
 #include "editor/buffer.cpp"
 #include "editor/window.cpp"
 #include "graphics/graphics.cpp"
