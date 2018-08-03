@@ -1,12 +1,17 @@
 // TODO(Splitting lines): Remove unused atrribute!
 #include "graphics.hpp"
+#include "../platfrom/platform.hpp"
 
 namespace graphics
 {
-    __attribute__ ((unused))
-    static void DrawSplittingLine(graphics::rectangle const& rect)
+    static color make_color(uint32 value)
     {
-        auto split_line = SDL_Rect { rect.x, rect.y, rect.width, rect.height };
-        SDL_FillRect(global::screen, &split_line, 0x000000); // 0x64645e
+        return color { .int_color = value, };
+    }
+
+    static void DrawSplittingLine(rectangle const& rect)
+    {
+        // auto split_line = SDL_Rect { rect.x, rect.y, rect.width, rect.height };
+        platform::draw_rectangle_on_screen(rect, make_color(0xFF00FF));
     }
 }

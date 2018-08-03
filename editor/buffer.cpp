@@ -5,7 +5,6 @@ namespace editor::global
     static editor::buffer buffers[256];
 }
 
-
 namespace editor
 {
     // TODO(Docs): Summary!

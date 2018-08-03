@@ -1,41 +1,18 @@
-#include <SDL.h>
-#include <SDL_ttf.h>
-
 #include "config.h"
-
-// TODO(Cleanup): Try to use as less globals as possible...
-namespace global
-{
-    // TODO(Platform): Make this platform-dependent.
-    static SDL_Window *window;
-
-    // This is a surface that we put stuff on, and after that bit it to the
-    // screen. This uses SDL software rendering and there is no use of
-    // SLD_Renderer and stuff. After a resizing this pointer is changed.
-    // Do not free it!
-    // TODO(Platform): Make this platform-dependent.
-    static SDL_Surface *screen;
-
-    static int window_w, window_h;
-
-    static const int number_of_surfaces = 5;
-    static SDL_Surface *alphabet['z' - 'a' + 1];
-    static SDL_Surface *text_surface[number_of_surfaces];
-
-    static auto font_size = 13.f;
-}
 
 // TODO(Cleanup): remove from here as many as possible.
 #include "gap_buffer.hpp"
 #include "editor/buffer.hpp"
 #include "editor/window.hpp"
 #include "graphics/graphics.hpp"
+#include "platfrom/platform.hpp"
 
 // TODO(Cleaup): Only for unity build.
 #include "gap_buffer.cpp"
 #include "editor/buffer.cpp"
 #include "editor/window.cpp"
 #include "graphics/graphics.cpp"
+#include "platfrom/platform.cpp"
 
 namespace editor_window_utility
 {
@@ -171,7 +148,10 @@ static void InitializeFirstWindow()
         .contains_buffer = 1,
         .buffer_ptr = editor::global::buffers,
         .parent_ptr = nullptr,
-        .position = graphics::rectangle { 0, global::window_h - 17 +1, global::window_w, 17 }
+        .position = graphics::rectangle {
+            0, ::graphics::global::window_h - 17 + 1,
+            ::graphics::global::window_w, 17
+        }
     };
 
     // Window with index 1 is main window.
@@ -179,7 +159,10 @@ static void InitializeFirstWindow()
         .contains_buffer = 1,
         .buffer_ptr = editor::global::buffers + 1,
         .parent_ptr = nullptr,
-        .position = graphics::rectangle { 0, 0, global::window_w, global::window_h - 17 }
+        .position = graphics::rectangle {
+            0, 0,
+            ::graphics::global::window_w, ::graphics::global::window_h - 17
+        }
     };
 
     editor::global::current_window_idx = 1;
@@ -191,11 +174,17 @@ static void InitializeFirstWindow()
 //                void.
 static int ResizeWindow()
 {
-    editor::global::windows_arr[0]
-        .UpdateSize(graphics::rectangle {0, global::window_h - 17 + 1, global::window_w, 17 });
+    editor::global::windows_arr[0].UpdateSize(
+        graphics::rectangle {
+                0, ::graphics::global::window_h - 17 + 1,
+                ::graphics::global::window_w, 17
+        });
 
-    editor::global::windows_arr[1]
-        .UpdateSize(graphics::rectangle {0, 0, global::window_w, global::window_h - 17 });
+    editor::global::windows_arr[1].UpdateSize(
+        graphics::rectangle {
+            0, 0,
+            ::graphics::global::window_w, ::graphics::global::window_h - 17
+        });
 
     return 0;
 }
@@ -203,27 +192,27 @@ static int ResizeWindow()
 static void InitTextGlobalSutff()
 {
     auto font_test = TTF_OpenFont("/usr/share/fonts/TTF/DejaVuSansMono.ttf",
-                                  global::font_size);
+                                  ::graphics::global::font_size);
 
-    if (!(global::text_surface[0] =
+    if (!(::platform::global::text_surface[0] =
           TTF_RenderText_Solid(font_test,
                                "This text is solid.",
                                SDL_Color {0xF8, 0xF8, 0xF8, 0xFF}))
-        || !(global::text_surface[1] =
+        || !(::platform::global::text_surface[1] =
              TTF_RenderText_Shaded(font_test,
                                    "This text is shaded.",
                                    (SDL_Color){0xF8, 0xF8, 0xF8, 0xFF},
                                    // SDL_Color {0x15, 0x15, 0x80, 0xFF})) // 0x272822
                                    SDL_Color { 0x27, 0x28, 0x22, 0xFF}))
-        || !(global::text_surface[2] =
+        || !(::platform::global::text_surface[2] =
              TTF_RenderText_Blended(font_test,
                                     "This text is smoothed.",
                                     SDL_Color {0xF8, 0xF8, 0xF8, 0xFF}))
-        || !(global::text_surface[3] =
+        || !(::platform::global::text_surface[3] =
              TTF_RenderText_Blended(font_test,
                                     "This text is colored.",
                                     SDL_Color {0xF9, 0x26, 0x72, 0xFF}))
-        || !(global::text_surface[4] =
+        || !(::platform::global::text_surface[4] =
              TTF_RenderText_Blended(font_test,
                                     "static const auto font_size",
                                     SDL_Color {0xF9, 0x26, 0x72, 0xFF})))
@@ -237,7 +226,7 @@ static void InitTextGlobalSutff()
         char letter[2];
         letter[0] = c;
         letter[1] = '\0';
-        if (IS_NULL(global::alphabet[c] =
+        if (IS_NULL(::platform::global::alphabet[c] =
                     TTF_RenderText_Blended(font_test,
                                            letter,
                                            SDL_Color {0xF8, 0xF8, 0xF8, 0xFF})))
@@ -260,10 +249,10 @@ static void PrintTextLine(editor::window const* window_ptr,
         auto text_idx = static_cast<int>(text[i]);
         auto draw_rect = SDL_Rect {
             // Only for monospace fonts.
-            window_ptr->position.x + 2 + global::alphabet[text_idx]->w * i,
-            window_ptr->position.y + 2 + global::text_surface[0]->h * line_nr,
-            global::alphabet[text_idx]->w,
-            global::alphabet[text_idx]->h
+            window_ptr->position.x + 2 + ::platform::global::alphabet[text_idx]->w * i,
+            window_ptr->position.y + 2 + ::platform::global::text_surface[0]->h * line_nr,
+            ::platform::global::alphabet[text_idx]->w,
+            ::platform::global::alphabet[text_idx]->h
         };
 
         if (draw_rect.x + draw_rect.w >
@@ -274,8 +263,8 @@ static void PrintTextLine(editor::window const* window_ptr,
             return;
         }
 
-        if (FAILED(SDL_BlitSurface(global::alphabet[text_idx], nullptr,
-                                   global::screen, &draw_rect)))
+        if (FAILED(SDL_BlitSurface(::platform::global::alphabet[text_idx], nullptr,
+                                   ::platform::global::screen, &draw_rect)))
         {
             PANIC("Bitting surface failed!");
         }
@@ -285,13 +274,13 @@ static void PrintTextLine(editor::window const* window_ptr,
     {
         auto rect = SDL_Rect {
             window_ptr->position.x + 2 +
-            global::alphabet[static_cast<int>('a')]->w * cursor_idx,
-            window_ptr->position.y + 2 + global::text_surface[0]->h * line_nr,
+            ::platform::global::alphabet[static_cast<int>('a')]->w * cursor_idx,
+            window_ptr->position.y + 2 + ::platform::global::text_surface[0]->h * line_nr,
             2,
-            global::alphabet[static_cast<int>('a')]->h
+            ::platform::global::alphabet[static_cast<int>('a')]->h
         };
 
-        SDL_FillRect(global::screen, &rect, 0xF8F8F8FF);
+        SDL_FillRect(::platform::global::screen, &rect, 0xF8F8F8FF);
     }
 }
 
@@ -318,18 +307,18 @@ static void PrintTextLineFromGapBuffer(editor::window const* window_ptr,
 // void.
 static int RedrawWindow()
 {
-    global::screen = SDL_GetWindowSurface(global::window);
-    if (!global::screen)
+    ::platform::global::screen = SDL_GetWindowSurface(::platform::global::window);
+    if (!::platform::global::screen)
         PANIC("Couldnt get the right surface of the window!");
 
-    SDL_GetWindowSize(global::window,
-                      &global::window_w,
-                      &global::window_h);
+    SDL_GetWindowSize(::platform::global::window,
+                      &::graphics::global::window_w,
+                      &::graphics::global::window_h);
 
     // This is probobly obsolete and should be removed. This bug was fixed long
     // time ago. This used to happen when too many windows were created due to
     // the stack smashing.
-    if (global::window_w == 0 || global::window_h == 0)
+    if (::graphics::global::window_w == 0 || ::graphics::global::window_h == 0)
         PANIC("Size is 0!");
 
     ASSERT(editor::global::number_of_windows > 0);
@@ -338,7 +327,7 @@ static int RedrawWindow()
 
     // TODO(Splitting lines): Decide how i want to draw them.
 #if 1
-    graphics::DrawSplittingLine({ 0, global::window_h - 17, global::window_w, 1 });
+    graphics::DrawSplittingLine({ 0, ::graphics::global::window_h - 17, ::graphics::global::window_w, 1 });
 #endif
 
     mini_buffer_window->Redraw(editor::global::current_window_idx == 0);
@@ -382,7 +371,7 @@ static int RedrawWindow()
         }
     }
 
-    SDL_UpdateWindowSurface(global::window);
+    SDL_UpdateWindowSurface(::platform::global::window);
     return 0;
 }
 
@@ -981,22 +970,22 @@ static int InitWindow(const int width, const int height)
 {
     // NOTE(Testing): Sometimes it is good to set width and height to 0, 0 and
     // test what happens when window is smallest possible.
-    global::window = SDL_CreateWindow("Editor",
-                                      SDL_WINDOWPOS_UNDEFINED,
-                                      SDL_WINDOWPOS_UNDEFINED,
-                                      width, height, 0);
-    // 0, 0, 0); // To test corner-cases.
+    ::platform::global::window = SDL_CreateWindow("Editor",
+                                                  SDL_WINDOWPOS_UNDEFINED,
+                                                  SDL_WINDOWPOS_UNDEFINED,
+                                                  width, height, 0);
+                                                  // 0, 0, 0); // To test corner-cases.
 
-    if (!global::window)
+    if (!::platform::global::window)
     {
         // TODO(Debug): Logging.
         return -1;
     }
 
     // Instead of creating a renderer, draw directly to the screen.
-    global::screen = SDL_GetWindowSurface(global::window);
+    ::platform::global::screen = SDL_GetWindowSurface(::platform::global::window);
 
-    if (!global::screen)
+    if (!::platform::global::screen)
     {
         // TODO(Debug): Logging.
         return -1;
@@ -1027,23 +1016,6 @@ static bool Validate(editor::window *window)
     }
 }
 
-// TODO: Remove unused atrribute!
-__attribute__ ((unused))
-static void DEBUG_PrintWindowsState(const editor::window *window)
-{
-    if (!window)
-        printf(" (nullptr) ");
-    else if (window->contains_buffer)
-        printf(" (Buffer: %ld) ", window->buffer_ptr - editor::global::buffers);
-    else
-    {
-        printf(" (%c){ ", (window->split == editor::window_split::WIN_SPLIT_HORIZONTAL ? 'H' : 'V'));
-        for(auto i = 0; i < window->number_of_windows; ++i)
-            DEBUG_PrintWindowsState(window->split_windows[i]);
-        printf("} ");
-    }
-}
-
 int main(void)
 {
     if (FAILED(InitSDL()))
@@ -1064,20 +1036,20 @@ int main(void)
                  0, current.w, current.h, current.refresh_rate);
 
     // The size of the window to render.
-    global::window_w = current.w / 3;
-    global::window_h = current.h / 2;
+    ::graphics::global::window_w = current.w / 3;
+    ::graphics::global::window_h = current.h / 2;
 
-    auto window_x = current.w / 2 - global::window_w / 2;
-    auto window_y = current.h / 2 - global::window_h / 2;
+    auto window_x = current.w / 2 - ::graphics::global::window_w / 2;
+    auto window_y = current.h / 2 - ::graphics::global::window_h / 2;
 
     // TODO(Platform): Use values based on screen width/height, or let user set
     // his own.
-    if (FAILED(InitWindow(global::window_w, global::window_h)))
+    if (FAILED(InitWindow(::graphics::global::window_w, ::graphics::global::window_h)))
     {
         // TODO(Debug): Logging.
         exit(1);
     }
-    SDL_SetWindowPosition(global::window, window_x, window_y);
+    SDL_SetWindowPosition(::platform::global::window, window_x, window_y);
 
     InitializeFirstWindow();
 
@@ -1096,7 +1068,7 @@ int main(void)
     {
         auto width = 0;
         auto height = 0;
-        SDL_GetWindowSize(global::window, &width, &height);
+        SDL_GetWindowSize(::platform::global::window, &width, &height);
         LOG_INFO("Current window size: %d x %d", width, height);
 
         SDL_Event event;

@@ -1,3 +1,7 @@
+#include "window.hpp"
+#include "../platfrom/platform.hpp"
+#include "../graphics/graphics.hpp"
+
 // TODO(Cleanup): Try to use as less globals as possible...
 namespace editor::global
 {
@@ -28,6 +32,24 @@ namespace editor
             };
 
         return global::windows_arr + global::number_of_windows - 1;
+    }
+
+    // TODO: Remove unused atrribute!
+    __attribute__ ((unused))
+    static void DEBUG_PrintWindowsState(const window *window)
+    {
+        if (!window)
+            printf(" (nullptr) ");
+        else if (window->contains_buffer)
+            printf(" (Buffer: %ld) ", window->buffer_ptr - global::buffers);
+        else
+        {
+            printf(" (%c){ ",
+                   window->split == window_split::WIN_SPLIT_HORIZONTAL ? 'H' : 'V');
+            for(auto i = 0; i < window->number_of_windows; ++i)
+                DEBUG_PrintWindowsState(window->split_windows[i]);
+            printf("} ");
+        }
     }
 
     int window::GetIndexInParent() const
@@ -62,9 +84,9 @@ namespace editor
         switch (split_type)
         {
             case WIN_SPLIT_VERTCAL:
-                return static_cast<float>(position.height) / ::global::window_h;
+                return static_cast<float>(position.height) /  ::graphics::global::window_h;
             case WIN_SPLIT_HORIZONTAL:
-                return static_cast<float>(position.width) / ::global::window_w;
+                return static_cast<float>(position.width) / ::graphics::global::window_w;
 
             default:
                 UNREACHABLE();
@@ -89,8 +111,8 @@ namespace editor
         // We won't let user split the window, if one of the windows takes less than
         // the min size of the window.
         auto split_h_or_v = (split_type == WIN_SPLIT_VERTCAL
-                             ? static_cast<float>(position.height) / ::global::window_h
-                             : static_cast<float>(position.width) / ::global::window_w);
+                             ? static_cast<float>(position.height) / ::graphics::global::window_h
+                             : static_cast<float>(position.width) / ::graphics::global::window_w);
 
         if (split_h_or_v < MIN_PERCANTAGE_WINDOW_SPLIT * 2)
         {
@@ -242,15 +264,7 @@ namespace editor
     {
         if (contains_buffer)
         {
-            auto sdl_rect = SDL_Rect {
-                position.x, position.y,
-                position.width, position.height
-            };
-
-            SDL_FillRect(::global::screen,
-                         &sdl_rect,
-                         current_select ? 0x272822 : 0x171812);
-
+            platform::draw_rectangle_on_screen(position, graphics::make_color(0x272822));
         }
         else
             for (auto i = 0; i < number_of_windows; ++i)
