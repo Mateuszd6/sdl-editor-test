@@ -52,7 +52,6 @@ namespace editor_window_utility
         static void ResizeIthWindowRight(editor::window* parent_window,
                                          int index_in_parent)
         {
-
             // Cannot be max, because we move right.
             if (index_in_parent == parent_window->number_of_windows -1)
             {
@@ -191,188 +190,9 @@ static int ResizeWindow()
 
 static void InitTextGlobalSutff()
 {
-    auto font_test = TTF_OpenFont("/usr/share/fonts/TTF/DejaVuSansMono.ttf",
-                                  ::graphics::global::font_size);
-
-    if (!(::platform::global::text_surface[0] =
-          TTF_RenderText_Solid(font_test,
-                               "This text is solid.",
-                               SDL_Color {0xF8, 0xF8, 0xF8, 0xFF}))
-        || !(::platform::global::text_surface[1] =
-             TTF_RenderText_Shaded(font_test,
-                                   "This text is shaded.",
-                                   (SDL_Color){0xF8, 0xF8, 0xF8, 0xFF},
-                                   // SDL_Color {0x15, 0x15, 0x80, 0xFF})) // 0x272822
-                                   SDL_Color { 0x27, 0x28, 0x22, 0xFF}))
-        || !(::platform::global::text_surface[2] =
-             TTF_RenderText_Blended(font_test,
-                                    "This text is smoothed.",
-                                    SDL_Color {0xF8, 0xF8, 0xF8, 0xFF}))
-        || !(::platform::global::text_surface[3] =
-             TTF_RenderText_Blended(font_test,
-                                    "This text is colored.",
-                                    SDL_Color {0xF9, 0x26, 0x72, 0xFF}))
-        || !(::platform::global::text_surface[4] =
-             TTF_RenderText_Blended(font_test,
-                                    "static const auto font_size",
-                                    SDL_Color {0xF9, 0x26, 0x72, 0xFF})))
-    {
-        // TODO(Debug): handle error here, perhaps print TTF_GetError at least.
-        PANIC("SDL_TTF internal error. Game Over ;(");
-    }
-
-    for (auto c = 1; c < 128; ++c)
-    {
-        char letter[2];
-        letter[0] = c;
-        letter[1] = '\0';
-        if (IS_NULL(::platform::global::alphabet[c] =
-                    TTF_RenderText_Blended(font_test,
-                                           letter,
-                                           SDL_Color {0xF8, 0xF8, 0xF8, 0xFF})))
-        {
-            PANIC("SDL_TTF internal error. Game Over ;(");
-        }
-    }
-
-    TTF_CloseFont(font_test);
-    font_test = nullptr;
-}
-
-static void PrintTextLine(editor::window const* window_ptr,
-                          int line_nr, // First visible line of the buffer is 0.
-                          char const* text,
-                          int cursor_idx) // gap_buffer const* line
-{
-    for (auto i = 0; text[i]; ++i)
-    {
-        auto text_idx = static_cast<int>(text[i]);
-        auto draw_rect = SDL_Rect {
-            // Only for monospace fonts.
-            window_ptr->position.x + 2 + ::platform::global::alphabet[text_idx]->w * i,
-            window_ptr->position.y + 2 + ::platform::global::text_surface[0]->h * line_nr,
-            ::platform::global::alphabet[text_idx]->w,
-            ::platform::global::alphabet[text_idx]->h
-        };
-
-        if (draw_rect.x + draw_rect.w >
-            window_ptr->position.x + window_ptr->position.width
-            || draw_rect.y + draw_rect.h >
-            window_ptr->position.y + window_ptr->position.height)
-        {
-            return;
-        }
-
-        if (FAILED(SDL_BlitSurface(::platform::global::alphabet[text_idx], nullptr,
-                                   ::platform::global::screen, &draw_rect)))
-        {
-            PANIC("Bitting surface failed!");
-        }
-    }
-
-    if (cursor_idx >= 0)
-    {
-        auto rect = SDL_Rect {
-            window_ptr->position.x + 2 +
-            ::platform::global::alphabet[static_cast<int>('a')]->w * cursor_idx,
-            window_ptr->position.y + 2 + ::platform::global::text_surface[0]->h * line_nr,
-            2,
-            ::platform::global::alphabet[static_cast<int>('a')]->h
-        };
-
-        SDL_FillRect(::platform::global::screen, &rect, 0xF8F8F8FF);
-    }
-}
-
-static void PrintTextLineFromGapBuffer(editor::window const* window_ptr,
-                                       int line_nr, // First visible line of the buffer is 0.
-                                       gap_buffer const* line,
-                                       int current_idx)
-{
-    auto text = line->to_c_str();
-    PrintTextLine(window_ptr,
-                  line_nr,
-                  reinterpret_cast<char const*>(text),
-                  current_idx);
-
-#if 0 // Debug stuff.
-    system("clear");
-    line->DEBUG_print_state();
-#endif
-
-    std::free(reinterpret_cast<void *>(const_cast<unsigned char*>(text)));
-}
-
-// TODO(Cleanup): Check if something here can fail, if not change the type to
-// void.
-static int RedrawWindow()
-{
-    ::platform::global::screen = SDL_GetWindowSurface(::platform::global::window);
-    if (!::platform::global::screen)
-        PANIC("Couldnt get the right surface of the window!");
-
-    SDL_GetWindowSize(::platform::global::window,
-                      &::graphics::global::window_w,
-                      &::graphics::global::window_h);
-
-    // This is probobly obsolete and should be removed. This bug was fixed long
-    // time ago. This used to happen when too many windows were created due to
-    // the stack smashing.
-    if (::graphics::global::window_w == 0 || ::graphics::global::window_h == 0)
-        PANIC("Size is 0!");
-
-    ASSERT(editor::global::number_of_windows > 0);
-    auto main_window = (editor::global::windows_arr + 1);
-    auto mini_buffer_window = (editor::global::windows_arr + 0);
-
-    // TODO(Splitting lines): Decide how i want to draw them.
-#if 1
-    graphics::DrawSplittingLine({ 0, ::graphics::global::window_h - 17, ::graphics::global::window_w, 1 });
-#endif
-
-    mini_buffer_window->Redraw(editor::global::current_window_idx == 0);
-    main_window->Redraw(editor::global::current_window_idx == 1);
-
-    if (!(editor::global::windows_arr + 1)->contains_buffer)
-    {
-        if ((editor::global::windows_arr + 2)->contains_buffer
-            && (editor::global::windows_arr + 4)->contains_buffer
-            && (editor::global::windows_arr + 5)->contains_buffer)
-        {
-            auto left_w = editor::global::windows_arr + 2;
-            auto right_w = editor::global::windows_arr + 4;
-            auto gap_w = editor::global::windows_arr + 5;
-
-            PrintTextLine(left_w, 0, "#include <iostream>", -1);
-            PrintTextLine(left_w, 2, "int main()", -1);
-            PrintTextLine(left_w, 3, "{", -1);
-            PrintTextLine(left_w, 4, "    const auto foobar = \"Hello world!\";", -1);
-            PrintTextLine(left_w, 5, "    std::cout << foobar << endl;", -1);
-            PrintTextLine(left_w, 7, "    return 0;", -1);
-            PrintTextLine(left_w, 8, "}", -1);
-
-            PrintTextLine(right_w, 0, "<!DOCTYPE html>", -1);
-            PrintTextLine(right_w, 1, "<html>", -1);
-            PrintTextLine(right_w, 2, "  <body>", -1);
-            PrintTextLine(right_w, 3, "    <h1>Example heading</h1>", -1);
-            PrintTextLine(right_w, 4, "    <p>Example paragraph</p>", -1);
-            PrintTextLine(right_w, 5, "  </body>", -1);
-            PrintTextLine(right_w, 6, "</html>", -1);
-
-            for (auto i = 0_u64; i < 128_u64; ++i)
-            {
-                PrintTextLineFromGapBuffer(gap_w,
-                                           i,
-                                           gap_w->buffer_ptr->lines + i,
-                                           (gap_w->buffer_ptr->curr_line == i
-                                            ? gap_w->buffer_ptr->curr_index
-                                            : -1));
-            }
-        }
-    }
-
-    SDL_UpdateWindowSurface(::platform::global::window);
-    return 0;
+    ::platform::initialize_font("/usr/share/fonts/TTF/DejaVuSansMono.ttf");
+    ::platform::run_font_test();
+    ::platform::destroy_font();
 }
 
 // If traverse is forward, we pick the first window in the subtree of the
@@ -1092,7 +912,7 @@ int main(void)
 
         // Move it to some event occurences or make a dirty-bit system.
         // TODO(Profiling): Redraw window only if something got dirty.
-        RedrawWindow();
+        ::platform::redraw_window();
 
 #ifdef DEBUG
         // Validate main window tree structure.

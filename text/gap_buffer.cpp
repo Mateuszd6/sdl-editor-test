@@ -31,8 +31,7 @@ uint8 const* gap_buffer::to_c_str() const
     return result;
 }
 
-#if 0
-int gap_buffer::get_idx() const
+int64 gap_buffer::get_idx() const
 {
     if (IS_EARLIER_IN_ARR(buffer, curr_point, gap_start)
         || gap_start == curr_point)
@@ -42,7 +41,6 @@ int gap_buffer::get_idx() const
     else
         return (gap_start - buffer) + (curr_point - gap_end);
 }
-#endif
 
 void gap_buffer::initialize()
 {
@@ -55,6 +53,15 @@ void gap_buffer::initialize()
     gap_end = buffer + alloced_mem_size;
 
     curr_point = buffer;
+}
+
+void gap_buffer::set_point_at_idx(int64 index)
+{
+    auto buffer_offset = gap_start - buffer;
+    if (buffer_offset <= index)
+        curr_point = buffer + index;
+    else
+        curr_point = gap_end + (index - buffer_offset);
 }
 
 bool gap_buffer::cursor_backward()

@@ -16,7 +16,7 @@ struct gap_buffer
     uint8* curr_point;
 
     void initialize();
-    void make_gap();
+    void set_point_at_idx(int64 index);
 
     bool cursor_forward();
     bool cursor_backward();
@@ -26,10 +26,8 @@ struct gap_buffer
     void move_buffer_to_current_point();
     void insert_at_point(uint8 character);
 
-#if 0
     // TODO(Cleaup): Change to size_t.
-    int get_idx() const;
-#endif
+    int64 get_idx() const;
 
     // TODO: Temporary, remove later:
     uint8 const* to_c_str() const;
