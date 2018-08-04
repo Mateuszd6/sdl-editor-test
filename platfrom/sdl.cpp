@@ -112,7 +112,9 @@ namespace platform
                                                 int current_idx)
     {
         auto text = line->to_c_str();
-        graphics::print_text_line(window_ptr, line_nr, reinterpret_cast<char const*>(text),current_idx);
+        graphics::print_text_line(window_ptr,
+                                  line_nr,
+                                  reinterpret_cast<char const*>(text),current_idx);
 
 #if 0 // Debug stuff.
         system("clear");
@@ -149,9 +151,20 @@ namespace platform
         graphics::DrawSplittingLine({ 0, ::graphics::global::window_h - 17, ::graphics::global::window_w, 1 });
 #endif
 
-        mini_buffer_window->Redraw(editor::global::current_window_idx == 0);
-        main_window->Redraw(editor::global::current_window_idx == 1);
+        mini_buffer_window->redraw(editor::global::current_window_idx == 0);
+        main_window->redraw(editor::global::current_window_idx == 1);
 
+        auto gap_w = editor::global::windows_arr + 1;
+        for (auto i = 0_u64; i < 128_u64; ++i)
+        {
+            print_text_line_form_gap_buffer(
+                gap_w,
+                i,
+                gap_w->buffer_ptr->lines + i,
+                (gap_w->buffer_ptr->curr_line == i ? gap_w->buffer_ptr->curr_index : -1));
+        }
+
+#if 0
         if (!(editor::global::windows_arr + 1)->contains_buffer)
         {
             if ((editor::global::windows_arr + 2)->contains_buffer
@@ -160,7 +173,7 @@ namespace platform
             {
                 auto left_w = editor::global::windows_arr + 2;
                 auto right_w = editor::global::windows_arr + 4;
-                auto gap_w = editor::global::windows_arr + 5;
+                auto gap_w = editor::global::windows_arr + 1;
 
                 ::graphics::print_text_line(left_w, 0, "#include <iostream>", -1);
                 ::graphics::print_text_line(left_w, 2, "int main()", -1);
@@ -177,18 +190,9 @@ namespace platform
                 ::graphics::print_text_line(right_w, 4, "    <p>Example paragraph</p>", -1);
                 ::graphics::print_text_line(right_w, 5, "  </body>", -1);
                 ::graphics::print_text_line(right_w, 6, "</html>", -1);
-
-                for (auto i = 0_u64; i < 128_u64; ++i)
-                {
-                    print_text_line_form_gap_buffer(gap_w,
-                                                    i,
-                                                    gap_w->buffer_ptr->lines + i,
-                                                    (gap_w->buffer_ptr->curr_line == i
-                                                     ? gap_w->buffer_ptr->curr_index
-                                                     : -1));
-                }
             }
         }
+#endif
 
         SDL_UpdateWindowSurface(::platform::global::window);
         return 0;

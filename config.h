@@ -13,7 +13,7 @@
 // My debug goodies library and its config stuff.
 #define DEBUG
 #define LOGGING
-#define DG_LOG_LVL DG_LOG_LVL_WARN // DG_LOG_LVL_ALL
+#define DG_LOG_LVL DG_LOG_LVL_ALL // DG_LOG_LVL_WARN
 #define DG_USE_COLORS 1
 #include "debug_goodies.h"
 

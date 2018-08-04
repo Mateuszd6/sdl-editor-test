@@ -34,6 +34,38 @@ namespace editor
         return global::windows_arr + global::number_of_windows - 1;
     }
 
+    // TODO(Cleanup): Would be nice to add them using regular, add-window/buffer API.
+    static void initialize_first_window()
+    {
+        auto mini_buffer = CreateNewBuffer();
+        auto main_window_buffer = CreateNewBuffer();
+
+        global::number_of_windows = 2;
+        // Window with index 0 contains minibuffer. And is drawn separetely.
+        global::windows_arr[0] = window {
+            .contains_buffer = 1,
+            .buffer_ptr = mini_buffer,
+            .parent_ptr = nullptr,
+            .position = ::graphics::rectangle {
+                0, ::graphics::global::window_h - 17 + 1,
+                ::graphics::global::window_w, 17
+            }
+        };
+
+        // Window with index 1 is main window.
+        global::windows_arr[1] = window {
+            .contains_buffer = 1,
+            .buffer_ptr = main_window_buffer,
+            .parent_ptr = nullptr,
+            .position = ::graphics::rectangle {
+                0, 0,
+                ::graphics::global::window_w, ::graphics::global::window_h - 17
+            }
+        };
+
+        global::current_window_idx = 1;
+    }
+
     // TODO: Remove unused atrribute!
     __attribute__ ((unused))
     static void DEBUG_PrintWindowsState(const window *window)
@@ -176,7 +208,7 @@ namespace editor
                 // be split window (does not contain a single buffer), and therefore
                 // cannot be selected.
                 parent_ptr->UpdateSize(parent_ptr->position);
-                parent_ptr->Redraw(false);
+                parent_ptr->redraw(false);
             }
         }
         else
@@ -260,7 +292,7 @@ namespace editor
         }
     }
 
-    void window::Redraw(bool current_select) const
+    void window::redraw(bool current_select) const
     {
         if (contains_buffer)
         {
@@ -269,7 +301,7 @@ namespace editor
         else
             for (auto i = 0; i < number_of_windows; ++i)
             {
-                split_windows[i]->Redraw(global::current_window_idx ==
+                split_windows[i]->redraw(global::current_window_idx ==
                                          (split_windows[i] - global::windows_arr));
             }
     }

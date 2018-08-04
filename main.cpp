@@ -43,7 +43,7 @@ namespace editor_window_utility
                 {
                     parent_window->splits_percentages[index_in_parent - 1] -= 0.01f;
                     parent_window->UpdateSize(parent_window->position);
-                    parent_window->Redraw(false); // Split window, cannot select.
+                    parent_window->redraw(false); // Split window, cannot select.
                 }
                 else
                     LOG_WARN("Left window is too small!!");
@@ -68,7 +68,7 @@ namespace editor_window_utility
             {
                 parent_window->splits_percentages[index_in_parent] += 0.01f;
                 parent_window->UpdateSize(parent_window->position);
-                parent_window->Redraw(false);
+                parent_window->redraw(false);
             }
             else
                 LOG_WARN("Right window is too small!!");
@@ -129,42 +129,6 @@ namespace editor_window_utility
                 UNREACHABLE();
         }
     }
-}
-
-// TODO(Cleanup): Would be nice to add them using regular, add-window/buffer API.
-static void InitializeFirstWindow()
-{
-    editor::global::number_of_buffers = 2;
-    editor::global::buffers[0] = {}; // TODO(Next): Initailize buffers.
-
-    // minibufer.
-    editor::global::buffers[1] = {}; // TODO(Next): Initailize buffers.
-
-    editor::global::number_of_windows = 2;
-
-    // Window with index 0 contains minibuffer. And is drawn separetely.
-    editor::global::windows_arr[0] = editor::window {
-        .contains_buffer = 1,
-        .buffer_ptr = editor::global::buffers,
-        .parent_ptr = nullptr,
-        .position = graphics::rectangle {
-            0, ::graphics::global::window_h - 17 + 1,
-            ::graphics::global::window_w, 17
-        }
-    };
-
-    // Window with index 1 is main window.
-    editor::global::windows_arr[1] = editor::window {
-        .contains_buffer = 1,
-        .buffer_ptr = editor::global::buffers + 1,
-        .parent_ptr = nullptr,
-        .position = graphics::rectangle {
-            0, 0,
-            ::graphics::global::window_w, ::graphics::global::window_h - 17
-        }
-    };
-
-    editor::global::current_window_idx = 1;
 }
 
 // TODO(Cleanup): Create namespace application and move resize and redraw window
@@ -470,6 +434,11 @@ static int HandleEvent(const SDL_Event &event)
             auto arrow = 0;
             auto backspace = false;
             auto del = false;
+            auto home = false;
+            auto end = false;
+
+            // Generic test operation.
+            auto test_operation = false;
 
             switch (event.key.keysym.sym)
             {
@@ -606,50 +575,66 @@ static int HandleEvent(const SDL_Event &event)
                     arrow = 4;
                     break;
 
+                case SDLK_HOME:
+                    home = true;
+                    break;
+
+                case SDLK_END:
+                    end = true;
+                    break;
+
+                case SDLK_ESCAPE:
+                    test_operation = true;
+                    break;
+
                 default:
                     break;
             }
 
+#if 0
             auto succeeded = false;
-            if (character != '\0')
-            {
-                (editor::global::windows_arr + 5)->buffer_ptr->insert_character(character);
-            }
-            else if (arrow == 1)
-            {
-                (editor::global::windows_arr + 5)->buffer_ptr->move_forward_curr_line();
-            }
-            else if (arrow == 2)
-            {
-                (editor::global::windows_arr + 5)->buffer_ptr->move_backward_curr_line();
-            }
-            else if (arrow == 3)
-            {
-                (editor::global::windows_arr + 5)->buffer_ptr->move_line_up();
-            }
-            else if (arrow == 4)
-            {
-                (editor::global::windows_arr + 5)->buffer_ptr->move_line_down();
-            }
-            else if (backspace)
-            {
-                (editor::global::windows_arr + 5)->buffer_ptr->delete_char_at_cursor_backward();
-            }
-            else if (del)
-            {
-                (editor::global::windows_arr + 5)->buffer_ptr->delete_char_at_cursor_forward();
-            }
-
+#endif
+            auto current_window = (editor::global::windows_arr + 1);
+            if(character != '\0')
+                current_window->buffer_ptr->insert_character(character);
+            else if(arrow == 1)
+                current_window->buffer_ptr->move_forward_curr_line();
+            else if(arrow == 2)
+                current_window->buffer_ptr->move_backward_curr_line();
+            else if(arrow == 3)
+                current_window->buffer_ptr->move_line_up();
+            else if(arrow == 4)
+                current_window->buffer_ptr->move_line_down();
+            else if(backspace)
+                current_window->buffer_ptr->delete_char_at_cursor_backward();
+            else if(del)
+                current_window->buffer_ptr->delete_char_at_cursor_forward();
+            else if(home)
+                current_window->buffer_ptr->jump_start_line();
+            else if(end)
+                current_window->buffer_ptr->jump_end_line();
+            else if(test_operation)
+                for (int j = 0; j < 7; ++j)
+                    for (int i = 0; i < 10; ++i)
+                        current_window->buffer_ptr->insert_character('0' + i);
+#if 0
             if (!succeeded)
-            {
                 LOG_WARN("Could not make the operation!");
-            }
+#endif
+
+            LOG_TRACE("GAP size of the current line: %lu",
+                      current_window
+                      ->buffer_ptr
+                      ->lines[current_window->buffer_ptr->curr_line]
+                      .get_gap_size());
 #endif
         } break;
 
         case SDL_KEYUP:
         {
+#if 0
             LOG_INFO("MSG ---> KEY UP %d", event.key.keysym.sym);
+#endif
         } break;
 
         case SDL_WINDOWEVENT:
@@ -658,105 +643,123 @@ static int HandleEvent(const SDL_Event &event)
             {
                 case SDL_WINDOWEVENT_SHOWN:
                 {
-                    LOG_INFO("MSG ---> Window %d shown",
-                             event.window.windowID);
+#if 0
+                    LOG_INFO("MSG ---> Window %d shown", event.window.windowID);
+#endif
                 } break;
 
                 case SDL_WINDOWEVENT_HIDDEN:
                 {
-                    LOG_INFO("MSG ---> Window %d hidden",
-                             event.window.windowID);
+#if 0
+                    LOG_INFO("MSG ---> Window %d hidden", event.window.windowID);
+#endif
                 } break;
 
                 case SDL_WINDOWEVENT_EXPOSED:
                 {
-                    LOG_INFO("MSG ---> Window %d exposed",
-                             event.window.windowID);
+#if 0
+                    LOG_INFO("MSG ---> Window %d exposed", event.window.windowID);
+#endif
                 } break;
 
                 case SDL_WINDOWEVENT_MOVED:
                 {
+#if 0
                     LOG_INFO("MSG ---> Window %d moved to %d,%d",
                              event.window.windowID,
                              event.window.data1,
                              event.window.data2);
+#endif
                 } break;
 
                 case SDL_WINDOWEVENT_RESIZED:
                 case SDL_WINDOWEVENT_SIZE_CHANGED:
                 {
-                    LOG_INFO("MSG ---> Window %d resized",
-                             event.window.windowID);
+#if 0
+                    LOG_INFO("MSG ---> Window %d resized", event.window.windowID);
+#endif
                     ResizeWindow();
                 } break;
 
                 case SDL_WINDOWEVENT_MINIMIZED:
                 {
-                    LOG_INFO("MSG ---> Window %d minimized",
-                             event.window.windowID);
+#if 0
+                    LOG_INFO("MSG ---> Window %d minimized", event.window.windowID);
+#endif
                 } break;
 
                 case SDL_WINDOWEVENT_MAXIMIZED:
                 {
-                    LOG_INFO("MSG ---> Window %d maximized",
-                             event.window.windowID);
+#if 0
+                    LOG_INFO("MSG ---> Window %d maximized", event.window.windowID);
+#endif
                 } break;
 
                 case SDL_WINDOWEVENT_RESTORED:
                 {
-                    LOG_INFO("MSG ---> Window %d restored",
-                             event.window.windowID);
+#if 0
+                    LOG_INFO("MSG ---> Window %d restored", event.window.windowID);
+#endif
                 } break;
 
                 case SDL_WINDOWEVENT_ENTER:
                 {
-                    LOG_INFO("MSG ---> Mouse entered window %d",
-                             event.window.windowID);
+#if 0
+                    LOG_INFO("MSG ---> Mouse entered window %d", event.window.windowID);
+#endif
                 } break;
 
                 case SDL_WINDOWEVENT_LEAVE:
                 {
-                    LOG_INFO("MSG ---> Mouse left window %d",
-                             event.window.windowID);
+#if 0
+                    LOG_INFO("MSG ---> Mouse left window %d", event.window.windowID);
+#endif
                 } break;
 
                 case SDL_WINDOWEVENT_FOCUS_GAINED:
                 {
-                    LOG_INFO("MSG ---> Window %d gained keyboard focus",
-                             event.window.windowID);
+#if 0
+                    LOG_INFO("MSG ---> Window %d gained keyboard focus", event.window.windowID);
+#endif
                 } break;
 
                 case SDL_WINDOWEVENT_FOCUS_LOST:
                 {
-                    LOG_INFO("MSG ---> Window %d lost keyboard focus",
-                             event.window.windowID);
+#if 0
+                    LOG_INFO("MSG ---> Window %d lost keyboard focus", event.window.windowID);
+#endif
                 } break;
 
                 case SDL_WINDOWEVENT_CLOSE:
                 {
-                    LOG_INFO("MSG ---> Window %d closed",
-                             event.window.windowID);
+#if 0
+                    LOG_INFO("MSG ---> Window %d closed", event.window.windowID);
+#endif
                 } break;
 
 #if SDL_VERSION_ATLEAST(2, 0, 5)
                 case SDL_WINDOWEVENT_TAKE_FOCUS:
                 {
-                    LOG_INFO("MSG ---> Window %d is offered a focus",
-                             event.window.windowID);
+#if 0
+                    LOG_INFO("MSG ---> Window %d is offered a focus", event.window.windowID);
+#endif
                 } break;
 
                 case SDL_WINDOWEVENT_HIT_TEST:
                 {
-                    LOG_INFO("MSG ---> Window %d has a special hit test",
-                             event.window.windowID);
+#if 0
+                    LOG_INFO("MSG ---> Window %d has a special hit test", event.window.windowID);
+#endif
                 } break;
 #endif
 
                 default:
                 {
+#if 0
                     LOG_INFO("MSG ---> Window %d got unknown event %d",
                              event.window.windowID,
                              event.window.event);
+#endif
                 } break;
             }
         } break;
@@ -871,9 +874,9 @@ int main(void)
     }
     SDL_SetWindowPosition(::platform::global::window, window_x, window_y);
 
-    InitializeFirstWindow();
+    editor::initialize_first_window();
 
-#if 1
+#if 0
     editor::global::windows_arr[editor::global::current_window_idx]
         .SplitWindow(editor::window_split::WIN_SPLIT_HORIZONTAL);
     SwitchWindow(editor::window_traverse_mode::WIN_TRAVERSE_FORWARD);
@@ -889,7 +892,10 @@ int main(void)
         auto width = 0;
         auto height = 0;
         SDL_GetWindowSize(::platform::global::window, &width, &height);
+
+#if 0
         LOG_INFO("Current window size: %d x %d", width, height);
+#endif
 
         SDL_Event event;
         SDL_WaitEvent(&event);
@@ -897,6 +903,7 @@ int main(void)
         if (HandleEvent(event))
             break;
 
+#if 0 // TODO(Cleaup): I think this is obsolete stuff, but check it out.
         static auto diff = 0.01f;
         editor::global::windows_arr[0].splits_percentages[0] += diff;
         if (editor::global::windows_arr[0].splits_percentages[0] > 0.9f)
@@ -909,6 +916,7 @@ int main(void)
             editor::global::windows_arr[0].splits_percentages[0] = 0.1f;
             diff *= -1;
         }
+#endif
 
         // Move it to some event occurences or make a dirty-bit system.
         // TODO(Profiling): Redraw window only if something got dirty.

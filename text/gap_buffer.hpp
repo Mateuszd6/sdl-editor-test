@@ -1,6 +1,11 @@
 #ifndef __GAP_BUFFER_HPP_INCLUDED__
 #define __GAP_BUFFER_HPP_INCLUDED__
 
+// TODO: Document these macros!
+#define GAP_BUF_MIN_SIZE_BEFORE_MEM_EXPAND (2)
+#define GAP_BUF_SIZE_AFTER_REALLOC (64)
+#define GAP_BUF_MAX_SIZE_BEFORE_MEM_SHRINK (128)
+
 struct gap_buffer
 {
     uint8* buffer;
@@ -17,13 +22,21 @@ struct gap_buffer
 
     void initialize();
     void set_point_at_idx(int64 index);
+    void move_gap_to_current_point();
+    void move_gap_to_buffer_end();
+    int64 get_gap_size() const;
 
+    // Only these should be used.
     bool cursor_forward();
     bool cursor_backward();
+
+    bool jump_start_dumb();
+    bool jump_end_dumb();
+
     bool delete_char_forward();
     bool delete_char_backward();
 
-    void move_buffer_to_current_point();
+    // Can allocate memory.
     void insert_at_point(uint8 character);
 
     // TODO(Cleaup): Change to size_t.

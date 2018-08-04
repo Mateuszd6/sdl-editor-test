@@ -10,13 +10,20 @@ namespace editor
     // TODO(Docs): Summary!
     static editor::buffer *CreateNewBuffer()
     {
-        for (int i = 0; i < NUMBER_OF_LINES_IN_BUFFER; ++i)
-            global::buffers[global::number_of_buffers].lines[i].initialize();
-
         auto result = global::buffers + global::number_of_buffers;
         global::number_of_buffers++;
 
+        // Initailize all lines.
+        for (int i = 0; i < NUMBER_OF_LINES_IN_BUFFER; ++i)
+            result->lines[i].initialize();
+
         return result;
+    }
+
+    void buffer::update_pos_in_line()
+    {
+        curr_index = lines[curr_line].get_idx();
+        LOG_TRACE("Position has beed updated.");
     }
 
     bool buffer::insert_character(uint8 character)
@@ -25,9 +32,8 @@ namespace editor
         if (character != '\0')
         {
             lines[curr_line].insert_at_point(character);
-            curr_index++;
-
             succeeded = true; // Inserting character cannot fail.
+            update_pos_in_line();
         }
 
         return succeeded;
@@ -37,7 +43,7 @@ namespace editor
     {
         auto succeeded = lines[curr_line].cursor_forward();
         if (succeeded)
-            curr_index++;
+            update_pos_in_line();
 
         return succeeded;
     }
@@ -46,8 +52,23 @@ namespace editor
     {
         auto succeeded = lines[curr_line].cursor_backward();
         if (succeeded)
-            curr_index--;
+            update_pos_in_line();
 
+        return succeeded;
+    }
+
+    bool buffer::delete_char_at_cursor_backward()
+    {
+        auto succeeded = lines[curr_line].delete_char_backward();
+        if (succeeded)
+            update_pos_in_line();
+
+        return succeeded;
+    }
+
+    bool buffer::delete_char_at_cursor_forward()
+    {
+        auto succeeded = lines[curr_line].delete_char_forward();
         return succeeded;
     }
 
@@ -70,19 +91,22 @@ namespace editor
         return succeeded;
     }
 
-    bool buffer::delete_char_at_cursor_backward()
+    bool buffer::jump_start_line()
     {
-        auto succeeded = lines[curr_line].delete_char_backward();
+        auto result = lines[curr_line].jump_start_dumb();
 
-        if (succeeded)
-            curr_index--;
+        // TODO: This can be called only if(result)
+        update_pos_in_line();
 
-        return succeeded;
+        return result;
     }
 
-    bool buffer::delete_char_at_cursor_forward()
+    bool buffer::jump_end_line()
     {
-        auto succeeded = lines[curr_line].delete_char_forward();
-        return succeeded;
+        auto result = lines[curr_line].jump_end_dumb();
+        // TODO: This can be called only if(result)
+        update_pos_in_line();
+
+        return result;
     }
 }

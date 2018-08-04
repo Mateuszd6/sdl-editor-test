@@ -49,7 +49,7 @@ namespace editor
 
         void SplitWindow(window_split split_type);
         void UpdateSize(graphics::rectangle new_rect);
-        void Redraw(bool current_select) const;
+        void redraw(bool current_select) const;
         int GetIndexInParent() const;
         bool IsFirstInParent() const;
         bool IsLastInParent() const;

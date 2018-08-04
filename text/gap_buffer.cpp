@@ -64,6 +64,12 @@ void gap_buffer::set_point_at_idx(int64 index)
         curr_point = gap_end + (index - buffer_offset);
 }
 
+int64 gap_buffer::get_gap_size() const
+{
+    return (gap_end - gap_start);
+}
+
+
 bool gap_buffer::cursor_backward()
 {
     if (curr_point != buffer)
@@ -103,7 +109,7 @@ bool gap_buffer::delete_char_backward()
 {
     if (curr_point != buffer)
     {
-        move_buffer_to_current_point();
+        move_gap_to_current_point();
 
         gap_start--;
         curr_point--;
@@ -118,7 +124,7 @@ bool gap_buffer::delete_char_forward()
 {
     if ((buffer + alloced_mem_size) != curr_point) // TODO: Make sure this is correct.
     {
-        move_buffer_to_current_point();
+        move_gap_to_current_point();
 
         // If gap end is at the end of the buffer.
         // We must check this after moving the buffer.
@@ -134,7 +140,7 @@ bool gap_buffer::delete_char_forward()
     return true;
 }
 
-void gap_buffer::move_buffer_to_current_point()
+void gap_buffer::move_gap_to_current_point()
 {
     if (IS_EARLIER_IN_ARR(buffer, curr_point, gap_start))
     {
@@ -159,13 +165,74 @@ void gap_buffer::move_buffer_to_current_point()
         UNREACHABLE();
 }
 
+void gap_buffer::move_gap_to_buffer_end()
+{
+    if (gap_end == buffer + alloced_mem_size)
+        LOG_WARN("Gap already at the end.");
+    else
+    {
+        auto move_from_the_end = (buffer + alloced_mem_size) - gap_end;
+        memcpy(gap_start, gap_end, sizeof(uint8) * move_from_the_end);
+        gap_start += move_from_the_end;
+        gap_end += move_from_the_end;
+    }
+}
+
+// TODO(Testing): Battle-test this. Watch out for allocations!
 void gap_buffer::insert_at_point(uint8 character) // LATIN2 characters only.
 {
-    move_buffer_to_current_point();
+    move_gap_to_current_point();
 
     *curr_point = character;
     curr_point++;
     gap_start++;
+
+    // Expand memory if needed:
+    auto gap_size = get_gap_size();
+    if (gap_size <= GAP_BUF_MIN_SIZE_BEFORE_MEM_EXPAND)
+    {
+        move_gap_to_buffer_end();
+        LOG_DEBUG("Doing realloc. Line has %lu characters, gap moved to the end.",
+                  gap_start-buffer);
+
+        auto gap_start_idx = gap_start - buffer;
+        auto curr_point_idx = curr_point - buffer;
+        auto new_gap_size = GAP_BUF_SIZE_AFTER_REALLOC - gap_size;
+        auto new_size = alloced_mem_size + new_gap_size;
+        // TODO(Testing): Test it with custom realloc that always moves the memory.
+        auto new_ptr = static_cast<uint8*>(
+            realloc(buffer, new_size));
+
+        if (new_ptr)
+            buffer = new_ptr;
+        else
+            PANIC("Realloc has failed.");
+
+        alloced_mem_size = new_size;
+        gap_start = buffer + gap_start_idx;
+        curr_point = buffer + curr_point_idx;
+        gap_end = gap_start + new_gap_size;
+    }
+
+    ASSERT(get_gap_size() > GAP_BUF_MIN_SIZE_BEFORE_MEM_EXPAND);
+}
+
+bool gap_buffer::jump_start_dumb()
+{
+    auto has_moved = false;
+    while (cursor_backward())
+        has_moved = true;
+
+    return has_moved;
+}
+
+bool gap_buffer::jump_end_dumb()
+{
+    auto has_moved = false;
+    while (cursor_forward())
+        has_moved = true;
+
+    return has_moved;
 }
 
 #pragma clang diagnostic push
@@ -193,7 +260,7 @@ void gap_buffer::DEBUG_print_state() const
         ptr++;
     }
 
-    ASSERT(print_buffer_idx < alloced_mem_size); // TODO: Or <= ????
+    ASSERT(print_buffer_idx <= alloced_mem_size); // TODO: Or < ????
     for (auto i = print_buffer_idx; i < alloced_mem_size; ++i)
         print_buffer[print_buffer_idx++] = '_';
     print_buffer[print_buffer_idx++] = '\n';

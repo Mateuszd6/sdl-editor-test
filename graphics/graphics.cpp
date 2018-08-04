@@ -39,7 +39,7 @@ namespace graphics
                 || draw_rect.y + draw_rect.height >
                 window_ptr->position.y + window_ptr->position.height)
             {
-                return;
+                break;
             }
 
             ::platform::blit_letter(text_idx, draw_rect);
@@ -49,8 +49,7 @@ namespace graphics
         if (cursor_idx >= 0)
         {
             auto rect = rectangle {
-                window_ptr->position.x + 2 +
-                ::platform::get_letter_width() * cursor_idx,
+                window_ptr->position.x + 2 + ::platform::get_letter_width() * cursor_idx,
                 window_ptr->position.y + 2 + ::platform::get_letter_height() * line_nr,
                 2,
                 ::platform::get_letter_height()
