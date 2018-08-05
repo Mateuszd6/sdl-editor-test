@@ -94,9 +94,8 @@ namespace editor
     bool buffer::jump_start_line()
     {
         auto result = lines[curr_line].jump_start_dumb();
-
-        // TODO: This can be called only if(result)
-        update_pos_in_line();
+        if (result)
+            update_pos_in_line();
 
         return result;
     }
@@ -104,8 +103,8 @@ namespace editor
     bool buffer::jump_end_line()
     {
         auto result = lines[curr_line].jump_end_dumb();
-        // TODO: This can be called only if(result)
-        update_pos_in_line();
+        if (result)
+            update_pos_in_line();
 
         return result;
     }

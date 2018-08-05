@@ -33,10 +33,11 @@ struct gap_buffer
     bool jump_start_dumb();
     bool jump_end_dumb();
 
+    // Can shrink buffer memory.
     bool delete_char_forward();
     bool delete_char_backward();
 
-    // Can allocate memory.
+    // Can exapnd buffer memory.
     void insert_at_point(uint8 character);
 
     // TODO(Cleaup): Change to size_t.

@@ -2,10 +2,18 @@
 #define __EDITOR_BUFFER_HPP_INCLUDED__
 
 #include "../text/gap_buffer.hpp"
-#define NUMBER_OF_LINES_IN_BUFFER (128)
+#define NUMBER_OF_LINES_IN_BUFFER (256)
 
 namespace editor
 {
+    namespace detail
+    {
+        struct buffer_chunk
+        {
+
+        };
+    }
+
     struct buffer
     {
         uint64 curr_line;

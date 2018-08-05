@@ -114,6 +114,10 @@ bool gap_buffer::delete_char_backward()
         gap_start--;
         curr_point--;
 
+        // TODO(#3): This is the only place that the memory can be shrinked, if
+        //           we want to shrink it on the deleteion which im not sure if
+        //           this is good idea.
+
         return true;
     }
     else
@@ -122,22 +126,10 @@ bool gap_buffer::delete_char_backward()
 
 bool gap_buffer::delete_char_forward()
 {
-    if ((buffer + alloced_mem_size) != curr_point) // TODO: Make sure this is correct.
-    {
-        move_gap_to_current_point();
+    auto moved_forward = cursor_forward();
 
-        // If gap end is at the end of the buffer.
-        // We must check this after moving the buffer.
-        // TODO(Cleaup): Think if we can do it without moving the buffer first.
-        if (gap_end == buffer + alloced_mem_size)
-            return false;
-
-        gap_end++; // Check if gap end is not at the end of the buffer
-    }
-    else
-        return false;
-
-    return true;
+    // Cursor position should be updated in the delete_char_backward.
+    return moved_forward ? delete_char_backward() : false;
 }
 
 void gap_buffer::move_gap_to_current_point()
