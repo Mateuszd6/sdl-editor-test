@@ -154,6 +154,7 @@ namespace platform
         mini_buffer_window->redraw(editor::global::current_window_idx == 0);
         main_window->redraw(editor::global::current_window_idx == 1);
 
+#if 0
         auto gap_w = editor::global::windows_arr + 1;
         for (auto i = 0_u64; i < 128_u64; ++i)
         {
@@ -164,7 +165,6 @@ namespace platform
                 (gap_w->buffer_ptr->curr_line == i ? gap_w->buffer_ptr->curr_index : -1));
         }
 
-#if 0
         if (!(editor::global::windows_arr + 1)->contains_buffer)
         {
             if ((editor::global::windows_arr + 2)->contains_buffer

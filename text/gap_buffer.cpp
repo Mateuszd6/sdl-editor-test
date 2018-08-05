@@ -3,6 +3,20 @@
 
 #include "../config.h"
 
+static void move_gap_bufffer(gap_buffer* from, gap_buffer* to)
+{
+    to->buffer = from->buffer;
+    to->buffer = nullptr;
+    to->alloced_mem_size = from->alloced_mem_size;
+
+    auto gap_start_offset = from->gap_start - from->buffer;
+    auto gap_end_offset = from->gap_end - from->buffer;
+    auto curr_point_offset = from->curr_point - from->buffer;;
+    to->gap_start = to->buffer + gap_start_offset;
+    to->gap_end = to->buffer + gap_end_offset;
+    to->curr_point = to->buffer + curr_point_offset;
+}
+
 // TODO(Cleaup): This should be removed by the cleaup, or ;
 uint8 const* gap_buffer::to_c_str() const
 {
@@ -69,6 +83,29 @@ int64 gap_buffer::get_gap_size() const
     return (gap_end - gap_start);
 }
 
+bool gap_buffer::cursor_forward()
+{
+    // If we are not at the end of buffer
+    if ((buffer + alloced_mem_size) != curr_point)
+    {
+        // If we are at the last character before gap.
+        if (curr_point == gap_start)
+        {
+            // If the gap is at the end of allocated memory we cannot move further.
+            if (gap_end == buffer + alloced_mem_size)
+                return false;
+            // Otherwise we just throught the gap.
+            else
+                curr_point = gap_end + 1; // TODO(Cleanup): Is this legal -> gap_end + 1.
+        }
+        else
+            curr_point++;
+    }
+    else
+        return false;
+
+    return true;
+}
 
 bool gap_buffer::cursor_backward()
 {
@@ -83,26 +120,6 @@ bool gap_buffer::cursor_backward()
     }
     else
         return false;
-}
-
-bool gap_buffer::cursor_forward()
-{
-    if ((buffer + alloced_mem_size) != curr_point) // TODO: Make sure this is correct.
-    {
-        if (curr_point == gap_start)
-        {
-            if (gap_end == buffer + alloced_mem_size)
-                return false;
-            else
-                curr_point = gap_end + 1; // TODO(Cleanup): Is this legal -> gap_end + 1.
-        }
-        else
-            curr_point++;
-    }
-    else
-        return false;
-
-    return true;
 }
 
 bool gap_buffer::delete_char_backward()
@@ -192,8 +209,7 @@ void gap_buffer::insert_at_point(uint8 character) // LATIN2 characters only.
         auto new_gap_size = GAP_BUF_SIZE_AFTER_REALLOC - gap_size;
         auto new_size = alloced_mem_size + new_gap_size;
         // TODO(Testing): Test it with custom realloc that always moves the memory.
-        auto new_ptr = static_cast<uint8*>(
-            realloc(buffer, new_size));
+        auto new_ptr = static_cast<uint8*>(realloc(buffer, new_size));
 
         if (new_ptr)
             buffer = new_ptr;

@@ -436,6 +436,7 @@ static int HandleEvent(const SDL_Event &event)
             auto del = false;
             auto home = false;
             auto end = false;
+            auto enter = false;
 
             // Generic test operation.
             auto test_operation = false;
@@ -587,46 +588,58 @@ static int HandleEvent(const SDL_Event &event)
                     test_operation = true;
                     break;
 
+                case SDLK_RETURN:
+                    enter = true;
+                    break;
+
                 default:
                     break;
             }
 
-#if 0
             auto succeeded = false;
-#endif
             auto current_window = (editor::global::windows_arr + 1);
             if(character != '\0')
-                current_window->buffer_ptr->insert_character(character);
+                current_window->buf_point.insert_character(character);
             else if(arrow == 1)
-                current_window->buffer_ptr->move_forward_curr_line();
+                current_window->buf_point.move_forward_curr_line();
             else if(arrow == 2)
-                current_window->buffer_ptr->move_backward_curr_line();
+                current_window->buf_point.move_backward_curr_line();
             else if(arrow == 3)
-                current_window->buffer_ptr->move_line_up();
+            {
+                LOG_WARN("Moved line up: %d", current_window->buf_point.move_line_up());
+            }
             else if(arrow == 4)
-                current_window->buffer_ptr->move_line_down();
+            {
+                LOG_WARN("Moved line down: %d", current_window->buf_point.move_line_down());
+            }
+            else if (enter)
+                current_window->buf_point.insert_newline();
+
+            current_window->buf_point.buffer_ptr->DEBUG_print_state();
+#if 0
             else if(backspace)
-                current_window->buffer_ptr->delete_char_at_cursor_backward();
+                current_window->buffer_ptr->chunks[0].delete_char_at_cursor_backward();
             else if(del)
-                current_window->buffer_ptr->delete_char_at_cursor_forward();
+                current_window->buffer_ptr->chunks[0].delete_char_at_cursor_forward();
             else if(home)
-                current_window->buffer_ptr->jump_start_line();
+                current_window->buffer_ptr->chunks[0].jump_start_line();
             else if(end)
-                current_window->buffer_ptr->jump_end_line();
+                current_window->buffer_ptr->chunks[0].jump_end_line();
             else if(test_operation)
                 for (int j = 0; j < 7; ++j)
                     for (int i = 0; i < 10; ++i)
                         current_window->buffer_ptr->insert_character('0' + i);
-#if 0
+
             if (!succeeded)
                 LOG_WARN("Could not make the operation!");
-#endif
+
 
             LOG_TRACE("GAP size of the current line: %lu",
                       current_window
                       ->buffer_ptr
                       ->lines[current_window->buffer_ptr->curr_line]
                       .get_gap_size());
+#endif
 #endif
         } break;
 

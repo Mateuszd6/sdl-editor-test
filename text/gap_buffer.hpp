@@ -15,9 +15,8 @@ struct gap_buffer
     uint8* gap_start;
     uint8* gap_end;
 
-    // TODO(Cleaup): I think this should be removed. Possibly create other
-    //               class called gap_buffer_ptr, or just just regular
-    //               uint8*?
+    // TODO(Cleaup): I think this should be removed. Possibly create other class
+    //               called gap_buffer_ptr, or just just regular uint8*?
     uint8* curr_point;
 
     void initialize();
@@ -41,6 +40,7 @@ struct gap_buffer
     void insert_at_point(uint8 character);
 
     // TODO(Cleaup): Change to size_t.
+    int64 get_size() const;
     int64 get_idx() const;
 
     // TODO: Temporary, remove later:
@@ -48,5 +48,8 @@ struct gap_buffer
 
     void DEBUG_print_state() const;
 };
+
+// The position from where the buffer has been moved is undefined.
+static void move_gap_bufffer(gap_buffer* from, gap_buffer* to);
 
 #endif // __GAP_BUFFER_HPP_INCLUDED__

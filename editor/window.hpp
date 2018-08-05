@@ -32,7 +32,7 @@ namespace editor
         {
             struct // If contains single buffer:
             {
-                editor::buffer *buffer_ptr;
+                editor::buffer_point buf_point;
             };
             struct // If is splited into multiple windows:
             {

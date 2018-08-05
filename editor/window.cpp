@@ -20,15 +20,15 @@ namespace editor::global
 
 namespace editor
 {
-    static window *CreateNewWindowWithBuffer(buffer *buffer,
-                                             window *root_window)
+    static window *CreateNewWindowWithBuffer(buffer* buffer,
+                                             window* root_window)
     {
         global::windows_arr[global::number_of_windows++] =
             window
             {
                 .contains_buffer = 1,
-                .buffer_ptr = buffer,
-                .parent_ptr = root_window
+                .buf_point = create_buffer_point(buffer),
+                .parent_ptr = root_window,
             };
 
         return global::windows_arr + global::number_of_windows - 1;
@@ -44,7 +44,7 @@ namespace editor
         // Window with index 0 contains minibuffer. And is drawn separetely.
         global::windows_arr[0] = window {
             .contains_buffer = 1,
-            .buffer_ptr = mini_buffer,
+            .buf_point = create_buffer_point(mini_buffer),
             .parent_ptr = nullptr,
             .position = ::graphics::rectangle {
                 0, ::graphics::global::window_h - 17 + 1,
@@ -55,7 +55,7 @@ namespace editor
         // Window with index 1 is main window.
         global::windows_arr[1] = window {
             .contains_buffer = 1,
-            .buffer_ptr = main_window_buffer,
+            .buf_point = create_buffer_point(main_window_buffer),
             .parent_ptr = nullptr,
             .position = ::graphics::rectangle {
                 0, 0,
@@ -73,7 +73,7 @@ namespace editor
         if (!window)
             printf(" (nullptr) ");
         else if (window->contains_buffer)
-            printf(" (Buffer: %ld) ", window->buffer_ptr - global::buffers);
+            printf(" (Buffer: %ld) ", window->buf_point.buffer_ptr - global::buffers);
         else
         {
             printf(" (%c){ ",
@@ -155,7 +155,7 @@ namespace editor
         if (contains_buffer)
         {
             auto new_buffer = CreateNewBuffer();
-            auto previous_buffer_ptr = buffer_ptr;
+            auto previous_buffer_ptr = buf_point.buffer_ptr;
 
             // parent_ptr cannot contain buffer!
             ASSERT(!parent_ptr || !parent_ptr->contains_buffer);
