@@ -154,6 +154,20 @@ namespace platform
         mini_buffer_window->redraw(editor::global::current_window_idx == 0);
         main_window->redraw(editor::global::current_window_idx == 1);
 
+        auto gap_w = editor::global::windows_arr + 1;
+        auto lines_printed = 0;
+        for(auto i = 0; i < NUMBER_OF_LINES_IN_BUFFER; ++i)
+        {
+            if (i ==  gap_w->buf_point.curr_chunk->gap_start)
+            {
+                i = gap_w->buf_point.curr_chunk->gap_end - 1;
+                continue;
+            }
+
+            print_text_line_form_gap_buffer(
+                gap_w, lines_printed++, &gap_w->buf_point.curr_chunk->lines[i], -1);
+        }
+
 #if 0
         auto gap_w = editor::global::windows_arr + 1;
         for (auto i = 0_u64; i < 128_u64; ++i)

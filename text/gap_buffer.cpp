@@ -6,15 +6,19 @@
 static void move_gap_bufffer(gap_buffer* from, gap_buffer* to)
 {
     to->buffer = from->buffer;
-    to->buffer = nullptr;
     to->alloced_mem_size = from->alloced_mem_size;
 
     auto gap_start_offset = from->gap_start - from->buffer;
     auto gap_end_offset = from->gap_end - from->buffer;
     auto curr_point_offset = from->curr_point - from->buffer;;
-    to->gap_start = to->buffer + gap_start_offset;
-    to->gap_end = to->buffer + gap_end_offset;
-    to->curr_point = to->buffer + curr_point_offset;
+    to->gap_start = (to->buffer + gap_start_offset);
+    to->gap_end = (to->buffer + gap_end_offset);
+    to->curr_point = (to->buffer + curr_point_offset);
+
+    from->buffer = nullptr;
+    from->gap_start = nullptr;
+    from->gap_end = nullptr;
+    from->curr_point = nullptr;
 }
 
 // TODO(Cleaup): This should be removed by the cleaup, or ;

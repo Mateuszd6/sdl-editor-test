@@ -14,67 +14,68 @@
 #include "graphics/graphics.cpp"
 #include "platfrom/platform.cpp"
 
-namespace editor_window_utility
+namespace editor_window_utility::detail
 {
-    namespace detail
+    static void ResizeIthWindowLeft(editor::window* parent_window,
+                                    int index_in_parent)
     {
-        static void ResizeIthWindowLeft(editor::window* parent_window,
-                                        int index_in_parent)
+        // Cannot be 0, because we move left.
+        if(index_in_parent == 0)
         {
-            // Cannot be 0, because we move left.
-            if(index_in_parent == 0)
-            {
-                LOG_WARN("Cannot move left.");
-                return;
-            }
+            LOG_WARN("Cannot move left.");
+            return;
+        }
 
-            auto prev_split = (index_in_parent > 1
-                               ? parent_window->splits_percentages[index_in_parent - 2]
-                               : 0.0f);
+        auto prev_split = (index_in_parent > 1
+                           ? parent_window->splits_percentages[index_in_parent - 2]
+                           : 0.0f);
 
-            // This does not work, because nested windows spoit them a lot.
+        // This does not work, because nested windows spoit them a lot.
 #if 0
-            if (parent_window->split_windows[index_in_parent - 1]
-                ->GetScreenPercForSplitType(window_split::WIN_SPLIT_HORIZONTAL) >= 0.2f)
+        if (parent_window->split_windows[index_in_parent - 1]
+            ->GetScreenPercForSplitType(window_split::WIN_SPLIT_HORIZONTAL) >= 0.2f)
 #endif
 
-                if (parent_window->splits_percentages[index_in_parent - 1] - prev_split
-                    >= MIN_PERCANTAGE_WINDOW_SPLIT)
-                {
-                    parent_window->splits_percentages[index_in_parent - 1] -= 0.01f;
-                    parent_window->UpdateSize(parent_window->position);
-                    parent_window->redraw(false); // Split window, cannot select.
-                }
-                else
-                    LOG_WARN("Left window is too small!!");
-        }
-
-        static void ResizeIthWindowRight(editor::window* parent_window,
-                                         int index_in_parent)
-        {
-            // Cannot be max, because we move right.
-            if (index_in_parent == parent_window->number_of_windows -1)
-            {
-                LOG_WARN("Cannot move right.");
-                return;
-            }
-
-            auto next_split = (index_in_parent < parent_window->number_of_windows -1
-                               ? parent_window->splits_percentages[index_in_parent + 1]
-                               : 1.0f);
-
-            if (next_split - parent_window->splits_percentages[index_in_parent]
+            if (parent_window->splits_percentages[index_in_parent - 1] - prev_split
                 >= MIN_PERCANTAGE_WINDOW_SPLIT)
             {
-                parent_window->splits_percentages[index_in_parent] += 0.01f;
+                parent_window->splits_percentages[index_in_parent - 1] -= 0.01f;
                 parent_window->UpdateSize(parent_window->position);
-                parent_window->redraw(false);
+                parent_window->redraw(false); // Split window, cannot select.
             }
             else
-                LOG_WARN("Right window is too small!!");
-        }
+                LOG_WARN("Left window is too small!!");
     }
 
+    static void ResizeIthWindowRight(editor::window* parent_window,
+                                     int index_in_parent)
+    {
+        // Cannot be max, because we move right.
+        if (index_in_parent == parent_window->number_of_windows -1)
+        {
+            LOG_WARN("Cannot move right.");
+            return;
+        }
+
+        auto next_split = (index_in_parent < parent_window->number_of_windows -1
+                           ? parent_window->splits_percentages[index_in_parent + 1]
+                           : 1.0f);
+
+        if (next_split - parent_window->splits_percentages[index_in_parent]
+            >= MIN_PERCANTAGE_WINDOW_SPLIT)
+        {
+            parent_window->splits_percentages[index_in_parent] += 0.01f;
+            parent_window->UpdateSize(parent_window->position);
+            parent_window->redraw(false);
+        }
+        else
+            LOG_WARN("Right window is too small!!");
+    }
+}
+
+
+namespace editor_window_utility
+{
     // NOTE: [curr_window] is heavily assumed to be the selected window.
     // TODO: Find better name.
     // TODO: Remove unused atrribute!
@@ -287,7 +288,6 @@ static void SwitchOutFromMiniBuffer()
 static int HandleEvent(const SDL_Event &event)
 {
     auto shouldQuit = 0;
-
     switch (event.type)
     {
         case SDL_QUIT:
@@ -437,13 +437,13 @@ static int HandleEvent(const SDL_Event &event)
             auto home = false;
             auto end = false;
             auto enter = false;
+            auto tab = false;
 
             // Generic test operation.
             auto test_operation = false;
 
             switch (event.key.keysym.sym)
             {
-
                 case SDLK_a:
                     character = (event.key.keysym.mod & KMOD_SHIFT) ? 'A' : 'a';
                     break;
@@ -523,34 +523,62 @@ static int HandleEvent(const SDL_Event &event)
                     character = (event.key.keysym.mod & KMOD_SHIFT) ? 'Z' : 'z';
                     break;
                 case SDLK_0:
-                    character = '0';
+                    character = (event.key.keysym.mod & KMOD_SHIFT) ? ')' : '0';
                     break;
                 case SDLK_1:
-                    character = '1';
+                    character = (event.key.keysym.mod & KMOD_SHIFT) ? '!' : '1';
                     break;
                 case SDLK_2:
-                    character = '2';
+                    character = (event.key.keysym.mod & KMOD_SHIFT) ? '@' : '2';
                     break;
                 case SDLK_3:
-                    character = '3';
+                    character = (event.key.keysym.mod & KMOD_SHIFT) ? '#' : '3';
                     break;
                 case SDLK_4:
-                    character = '4';
+                    character = (event.key.keysym.mod & KMOD_SHIFT) ? '$' : '4';
                     break;
                 case SDLK_5:
-                    character = '5';
+                    character = (event.key.keysym.mod & KMOD_SHIFT) ? '%' : '5';
                     break;
                 case SDLK_6:
-                    character = '6';
+                    character = (event.key.keysym.mod & KMOD_SHIFT) ? '^' : '6';
                     break;
                 case SDLK_7:
-                    character = '7';
+                    character = (event.key.keysym.mod & KMOD_SHIFT) ? '&' : '7';
                     break;
                 case SDLK_8:
-                    character = '8';
+                    character = (event.key.keysym.mod & KMOD_SHIFT) ? '*' : '8';
                     break;
                 case SDLK_9:
-                    character = '9';
+                    character = (event.key.keysym.mod & KMOD_SHIFT) ? '(' : '9';
+                    break;
+                case SDLK_SEMICOLON:
+                    character = (event.key.keysym.mod & KMOD_SHIFT) ? ':' : ';';
+                    break;
+                case SDLK_QUOTE:
+                    character = (event.key.keysym.mod & KMOD_SHIFT) ? '\'' : '\"';
+                    break;
+                case SDLK_RIGHTBRACKET:
+                    character = (event.key.keysym.mod & KMOD_SHIFT) ? '}' : ']';
+                    break;
+                case SDLK_LEFTBRACKET:
+                    character = (event.key.keysym.mod & KMOD_SHIFT) ? '{' : '[';
+                    break;
+                case SDLK_MINUS:
+                    character = (event.key.keysym.mod & KMOD_SHIFT) ? '_' : '-';
+                    break;
+                case SDLK_EQUALS:
+                    character = (event.key.keysym.mod & KMOD_SHIFT) ? '+' : '=';
+                    break;
+                case SDLK_PERIOD:
+                    character = (event.key.keysym.mod & KMOD_SHIFT) ? '>' : '.';
+                    break;
+                case SDLK_COMMA:
+                    character = (event.key.keysym.mod & KMOD_SHIFT) ? '<' : ',';
+                    break;
+
+                case SDLK_TAB:
+                    tab = true;
                     break;
                 case SDLK_SPACE:
                     character = ' ';
@@ -605,22 +633,22 @@ static int HandleEvent(const SDL_Event &event)
             else if(arrow == 2)
                 current_window->buf_point.move_backward_curr_line();
             else if(arrow == 3)
-            {
                 LOG_WARN("Moved line up: %d", current_window->buf_point.move_line_up());
-            }
             else if(arrow == 4)
-            {
                 LOG_WARN("Moved line down: %d", current_window->buf_point.move_line_down());
-            }
             else if (enter)
                 current_window->buf_point.insert_newline();
+            else if(backspace)
+                current_window->buf_point.delete_char_at_cursor_backward();
+            else if(del)
+                current_window->buf_point.delete_char_at_cursor_forward();
+            else if (tab)
+                for (int i = 0_u8; i < 4_u8; ++i)
+                    current_window->buf_point.insert_character(' ');
 
             current_window->buf_point.buffer_ptr->DEBUG_print_state();
 #if 0
-            else if(backspace)
-                current_window->buffer_ptr->chunks[0].delete_char_at_cursor_backward();
-            else if(del)
-                current_window->buffer_ptr->chunks[0].delete_char_at_cursor_forward();
+
             else if(home)
                 current_window->buffer_ptr->chunks[0].jump_start_line();
             else if(end)
@@ -948,6 +976,10 @@ int main(void)
             printf("\n");
         }
 #endif
+
+        system("clear");
+        (::editor::global::windows_arr + ::editor::global::current_window_idx)
+            ->buf_point.curr_chunk->DEBUG_print_state();
     }
 
     TTF_Quit();

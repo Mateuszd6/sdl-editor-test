@@ -22,6 +22,7 @@ namespace editor::detail
         void set_current_line(int64 index);
         void move_gap_to_current_line();
 
+        bool insert_character(uint8 character);
         bool insert_newline();
 
 #if 0
@@ -63,10 +64,10 @@ namespace editor
     // TODO: Move to another file.
     struct buffer_point
     {
+        buffer* buffer_ptr;
         detail::buffer_chunk* curr_chunk;
         uint64 line_in_chunk; // Can be smaller integer.
         uint64 index_in_line;
-        buffer* buffer_ptr;
 
         // Should be called after every operation on the line.
         void update_pos_in_line();
