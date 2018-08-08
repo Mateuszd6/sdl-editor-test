@@ -49,6 +49,11 @@ uint8 const* gap_buffer::to_c_str() const
     return result;
 }
 
+int64 gap_buffer::get_size() const
+{
+    return alloced_mem_size - get_gap_size();
+}
+
 int64 gap_buffer::get_idx() const
 {
     if (IS_EARLIER_IN_ARR(buffer, curr_point, gap_start)
@@ -212,8 +217,15 @@ void gap_buffer::insert_at_point(uint8 character) // LATIN2 characters only.
         auto curr_point_idx = curr_point - buffer;
         auto new_gap_size = GAP_BUF_SIZE_AFTER_REALLOC - gap_size;
         auto new_size = alloced_mem_size + new_gap_size;
+
         // TODO(Testing): Test it with custom realloc that always moves the memory.
+#if 0
         auto new_ptr = static_cast<uint8*>(realloc(buffer, new_size));
+#else
+        auto new_ptr = static_cast<uint8*>(malloc(sizeof(uint8) * new_size));
+        memcpy(new_ptr, buffer, sizeof(uint8) * alloced_mem_size);
+        free(buffer);
+#endif
 
         if (new_ptr)
             buffer = new_ptr;

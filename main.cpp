@@ -80,9 +80,9 @@ namespace editor_window_utility
     // TODO: Find better name.
     // TODO: Remove unused atrribute!
     __attribute__ ((unused))
-    static void ResizeWindowAux(editor::window* curr_window,
-                                editor::window_split split_type,
-                                editor::window_traverse_mode direction)
+    static void ResizeWindowAux(::editor::window* curr_window,
+                                ::editor::window_split split_type,
+                                ::editor::window_traverse_mode direction)
     {
         // TODO(Cleaup): Explain.
         auto right_parent = curr_window->parent_ptr;
@@ -119,10 +119,10 @@ namespace editor_window_utility
 
         switch(direction)
         {
-            case (editor::window_traverse_mode::WIN_TRAVERSE_BACKWARDS):
+            case (::editor::window_traverse_mode::WIN_TRAVERSE_BACKWARDS):
                 detail::ResizeIthWindowLeft(right_parent, index_in_parent);
                 break;
-            case (editor::window_traverse_mode::WIN_TRAVERSE_FORWARD):
+            case (::editor::window_traverse_mode::WIN_TRAVERSE_FORWARD):
                 detail::ResizeIthWindowRight(right_parent, index_in_parent);
                 break;
 
@@ -139,16 +139,16 @@ namespace editor_window_utility
 static int ResizeWindow()
 {
     editor::global::windows_arr[0].UpdateSize(
-        graphics::rectangle {
-                0, ::graphics::global::window_h - 17 + 1,
-                ::graphics::global::window_w, 17
-        });
+      graphics::rectangle {
+            0, ::graphics::global::window_h - 17 + 1,
+            ::graphics::global::window_w, 17
+      });
 
     editor::global::windows_arr[1].UpdateSize(
         graphics::rectangle {
             0, 0,
             ::graphics::global::window_w, ::graphics::global::window_h - 17
-        });
+      });
 
     return 0;
 }
@@ -556,7 +556,7 @@ static int HandleEvent(const SDL_Event &event)
                     character = (event.key.keysym.mod & KMOD_SHIFT) ? ':' : ';';
                     break;
                 case SDLK_QUOTE:
-                    character = (event.key.keysym.mod & KMOD_SHIFT) ? '\'' : '\"';
+                    character = (event.key.keysym.mod & KMOD_SHIFT) ? '\"' : '\'';
                     break;
                 case SDLK_RIGHTBRACKET:
                     character = (event.key.keysym.mod & KMOD_SHIFT) ? '}' : ']';
@@ -838,7 +838,7 @@ static int InitWindow(const int width, const int height)
                                                   SDL_WINDOWPOS_UNDEFINED,
                                                   SDL_WINDOWPOS_UNDEFINED,
                                                   width, height, 0);
-                                                  // 0, 0, 0); // To test corner-cases.
+    // 0, 0, 0); // To test corner-cases.
 
     if (!::platform::global::window)
     {
@@ -860,7 +860,7 @@ static int InitWindow(const int width, const int height)
 
 // Makes sure that the main window tree is done correctly. Inside horizontal
 // split window cannot be another horizontal etc...
-static bool Validate(editor::window *window)
+static bool Validate(::editor::window *window)
 {
     if (window->contains_buffer)
         return true;
@@ -915,7 +915,7 @@ int main(void)
     }
     SDL_SetWindowPosition(::platform::global::window, window_x, window_y);
 
-    editor::initialize_first_window();
+    ::editor::initialize_first_window();
 
 #if 0
     editor::global::windows_arr[editor::global::current_window_idx]
@@ -941,9 +941,6 @@ int main(void)
         SDL_Event event;
         SDL_WaitEvent(&event);
 
-        if (HandleEvent(event))
-            break;
-
 #if 0 // TODO(Cleaup): I think this is obsolete stuff, but check it out.
         static auto diff = 0.01f;
         editor::global::windows_arr[0].splits_percentages[0] += diff;
@@ -959,13 +956,16 @@ int main(void)
         }
 #endif
 
+        if (HandleEvent(event))
+            break;
+
         // Move it to some event occurences or make a dirty-bit system.
         // TODO(Profiling): Redraw window only if something got dirty.
         ::platform::redraw_window();
 
 #ifdef DEBUG
         // Validate main window tree structure.
-        ASSERT(Validate(editor::global::windows_arr + 1));
+        ASSERT(Validate(::editor::global::windows_arr + 1));
 #endif
 
         // Some printing stuff:
@@ -977,9 +977,11 @@ int main(void)
         }
 #endif
 
-        system("clear");
+        // system("clear");
         (::editor::global::windows_arr + ::editor::global::current_window_idx)
-            ->buf_point.curr_chunk->DEBUG_print_state();
+            ->buf_point
+            .curr_chunk
+            ->DEBUG_print_state();
     }
 
     TTF_Quit();

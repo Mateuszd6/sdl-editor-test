@@ -184,7 +184,7 @@ namespace editor::detail
 
             if (!in_gap)
             {
-                printf("%3d:  ", i);
+                printf("%3d:[%3ld]  ", i, lines[i].get_size());
                 auto line = const_cast<unsigned char*>(lines[i].to_c_str());
                 printf("%s", line);
                 free(static_cast<void*>(line));
@@ -267,7 +267,31 @@ namespace editor
     {
         auto removed = curr_chunk->lines[line_in_chunk].delete_char_backward();
 
-        // TODO: Handle the case when above fails.
+        if (!removed)
+        {
+            // Check if caret is at the end of the line...
+            if (curr_chunk->lines[line_in_chunk].get_idx() == 0)
+            {
+                // We are at the end of a buffer.
+                if (curr_chunk->curr_line == 0)
+                {
+                    // TODO: Remove a line from the previous chunk.
+                    // PANIC("Not implemented yet.");
+                }
+                else
+                {
+                    curr_chunk->move_gap_to_current_line();
+                    curr_chunk->gap_start--;
+                    curr_chunk->curr_line--;
+                    // line_in_chunk--; // TODO: This one is triky!
+
+                    removed = true;
+                }
+            }
+            else
+                PANIC("No idea why removing the letter failed.");
+        }
+
         return removed;
     }
 

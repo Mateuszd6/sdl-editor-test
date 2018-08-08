@@ -13,6 +13,7 @@ namespace editor::detail
         // The size of the chunks places before in the chunk array in the chunks
         // array in buffer object.
         int64 prev_chunks_size;
+
         int gap_start;
         int gap_end;
         int curr_line;
