@@ -1,55 +1,77 @@
 #ifndef __GAP_BUFFER_HPP_INCLUDED__
 #define __GAP_BUFFER_HPP_INCLUDED__
 
-// TODO: Document these macros!
+/// Initial size of the gap after initialization.
+#define GAP_BUF_DEFAULT_CAPACITY (80)
+
+/// Minimal size of the buffer before it gets expanded.
 #define GAP_BUF_MIN_SIZE_BEFORE_MEM_EXPAND (2)
+
+/// The size of a gap after expanding the memory.
 #define GAP_BUF_SIZE_AFTER_REALLOC (64)
+
+/// Max size of the gap before shrinking.
 #define GAP_BUF_MAX_SIZE_BEFORE_MEM_SHRINK (128)
 
 struct gap_buffer
 {
-    uint8* buffer;
-    size_t alloced_mem_size;
+    /// Allocated capacity of the buffer.
+    size_t capacity;
 
-    // Navigation pointers:
+    /// The content of the text buffer.
+    uint8* buffer;
+
+    /// Pointer to the first character that is not in the gap. Character pointer
+    /// by this pointer is not in the structure and is not defined.
     uint8* gap_start;
+
+    /// Pointer to the first vaild character that is outside of the gap. If the
+    /// gap is at the end of a buffer, this poitner poitns outside to the
+    /// allocated structure, and should not be referenced.
     uint8* gap_end;
 
-    // TODO(Cleaup): I think this should be removed. Possibly create other class
-    //               called gap_buffer_ptr, or just just regular uint8*?
-    uint8* curr_point;
-
+    /// Must be called before any action with this data structure is done.
     void initialize();
-    void set_point_at_idx(int64 index);
-    void move_gap_to_current_point();
+
+    /// Move tha gap so that gap_start is at the point. Called by inserting
+    /// character if the gap is at the different place by the start of the
+    /// operation. Assertion: gap_start == buffer + point after this operation.
+    void move_gap_to_point(size_t point);
+
+    /// Place the gap and the end of tha buffer.
     void move_gap_to_buffer_end();
-    int64 get_gap_size() const;
 
-    // Only these should be used.
-    bool cursor_forward();
-    bool cursor_backward();
+    /// Insert character at point. Will move the gap to the pointed location if
+    /// necesarry. Can exapnd buffer memory.
+    void insert_at_point(size_t point, uint8 character); // LATIN2 characters only.
 
-    bool jump_start_dumb();
-    bool jump_end_dumb();
+    /// Delete the character currently on the given point. Will move the gap to
+    /// the pointed location if necesarry. Can shrink buffer memory.
+    bool delete_char_backward(size_t point);
 
-    // Can shrink buffer memory.
-    bool delete_char_forward();
-    bool delete_char_backward();
+    /// Delete the character currently on the given point. Should give the same
+    /// result as moving forward one character and removing character backward.
+    /// Will move the gap to the pointed location if necesarry. Can shrink
+    /// buffer memory.
+    bool delete_char_forward(size_t point);
 
-    // Can exapnd buffer memory.
-    void insert_at_point(uint8 character);
+    /// Returns the number of characters stored in the buffer. Assertion: size()
+    /// + gap_size() == capacity for every vaild state of gap buffer.
+    size_t size() const;
 
-    // TODO(Cleaup): Change to size_t.
-    int64 get_size() const;
-    int64 get_idx() const;
+    /// Returns a size of the gap. Assertion: size() + gap_size() == capacity,
+    /// for every vaild state of gap buffer.
+    size_t gap_size() const;
 
-    // TODO: Temporary, remove later:
-    uint8 const* to_c_str() const;
+    /// Returns the c_str representation of the line. Allocates the memory for
+    /// the string. The caller is repsonsible for freeing this memory.
+    int8* to_c_str() const;
 
+    /// Pretty prints the structure state to console.
     void DEBUG_print_state() const;
 };
 
-// The position from where the buffer has been moved is undefined.
+/// The position from where the buffer has been moved is undefined.
 static void move_gap_bufffer(gap_buffer* from, gap_buffer* to);
 
 #endif // __GAP_BUFFER_HPP_INCLUDED__

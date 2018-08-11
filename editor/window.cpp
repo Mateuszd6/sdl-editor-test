@@ -66,6 +66,7 @@ namespace editor
         global::current_window_idx = 1;
     }
 
+#if 0
     // TODO: Remove unused atrribute!
     __attribute__ ((unused))
     static void DEBUG_PrintWindowsState(const window *window)
@@ -73,7 +74,7 @@ namespace editor
         if (!window)
             printf(" (nullptr) ");
         else if (window->contains_buffer)
-            printf(" (Buffer: %ld) ", window->buf_point.buffer_ptr - global::buffers);
+            printf(" (Buffer: %ld) ", (window->buf_point.buffer_ptr - global::buffers);
         else
         {
             printf(" (%c){ ",
@@ -83,6 +84,7 @@ namespace editor
             printf("} ");
         }
     }
+#endif
 
     int window::GetIndexInParent() const
     {
@@ -154,8 +156,9 @@ namespace editor
 
         if (contains_buffer)
         {
+            // TODO: This is obsolete!
             auto new_buffer = CreateNewBuffer();
-            auto previous_buffer_ptr = buf_point.buffer_ptr;
+            auto previous_buffer_ptr = CreateNewBuffer(); // buf_point.buffer_ptr;
 
             // parent_ptr cannot contain buffer!
             ASSERT(!parent_ptr || !parent_ptr->contains_buffer);

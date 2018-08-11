@@ -116,12 +116,7 @@ namespace platform
                                   line_nr,
                                   reinterpret_cast<char const*>(text),current_idx);
 
-#if 0 // Debug stuff.
-        system("clear");
-        line->DEBUG_print_state();
-#endif
-
-        std::free(reinterpret_cast<void *>(const_cast<unsigned char*>(text)));
+        std::free(reinterpret_cast<void*>(const_cast<int8*>(text)));
     }
 
     // TODO(Cleanup): Check if something here can fail, if not change the type to
@@ -155,17 +150,20 @@ namespace platform
         main_window->redraw(editor::global::current_window_idx == 1);
 
         auto gap_w = editor::global::windows_arr + 1;
-        auto lines_printed = 0;
-        for(auto i = 0; i < NUMBER_OF_LINES_IN_BUFFER; ++i)
+        auto lines_printed = 0_u64; // TODO(NEXT)!
+        for(auto i = 0_u64; i < NUMBER_OF_LINES_IN_BUFFER; ++i)
         {
-            if (i ==  gap_w->buf_point.curr_chunk->gap_start)
+            if (i ==  gap_w->buf_point.buffer_ptr->gap_start)
             {
-                i = gap_w->buf_point.curr_chunk->gap_end - 1;
+                i = gap_w->buf_point.buffer_ptr->gap_end - 1;
                 continue;
             }
 
-            print_text_line_form_gap_buffer(
-                gap_w, lines_printed++, &gap_w->buf_point.curr_chunk->lines[i], -1);
+            print_text_line_form_gap_buffer(gap_w,
+                                            lines_printed,
+                                            gap_w->buf_point.buffer_ptr->get_line(lines_printed),
+                                            lines_printed == curr_line ? curr_idx : -1);
+            lines_printed++;
         }
 
 #if 0

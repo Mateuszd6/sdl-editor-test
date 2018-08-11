@@ -7,174 +7,121 @@ namespace editor::global
 
 namespace editor::detail
 {
+    /// Line 0 is valid.
     void buffer_chunk::initailize()
     {
         prev_chunks_size = 0;
         gap_start = 1;
         gap_end = NUMBER_OF_LINES_IN_BUFFER;
-        curr_line = 0;
 
         lines[0].initialize();
     }
 
-    void buffer_chunk::set_current_line(int64 index)
+    /// After this move point'th line is not valid and must be initialized before use.
+    void buffer_chunk::move_gap_to_point(size_t point)
     {
-        if (gap_start <= index)
-            curr_line = gap_start;
-        else
-            curr_line = gap_end + (index - gap_start);
-    }
-
-    void buffer_chunk::move_gap_to_current_line()
-    {
-        if (curr_line < gap_start)
+        if (point < gap_start)
         {
-            auto diff = gap_start - curr_line - 1;
-#if 1
+            auto diff = gap_start - point;
             auto dest_start = gap_end - diff;
-            auto source_start = curr_line + 1;
-            for (auto i = 0; i < diff; ++i)
+            auto source_start = point;
+            for (auto i = 0_u64; i < diff; ++i)
                 move_gap_bufffer(&lines[source_start + i], &lines[dest_start + i]);
-#else
-            memcpy(gap_end - diff, curr_line, sizeof(uint8) * diff);
-#endif
+
             gap_start -= diff;
             gap_end -= diff;
-            curr_line = gap_start - 1;
         }
-
-        else if (gap_start < curr_line)
+        else if (point > gap_start)
         {
-            auto diff = curr_line - gap_end;
-#if 1
+            auto diff = point - gap_start;
             auto dest_start = gap_start;
             auto source_start = gap_end;
-            for (auto i = 0; i < diff; ++i)
+            for (auto i = 0_u64; i < diff; ++i)
                 move_gap_bufffer(&lines[source_start + i], &lines[dest_start + i]);
-#else
-            memcpy(gap_start, gap_end, sizeof(uint8) * diff);
-#endif
+
             gap_start += diff;
             gap_end += diff;
-            curr_line = gap_start - 1; // TODO(NEXT) +/-1 here?
         }
-
-        else if (curr_line == gap_start)
-        { // TODO(Cleanup): Don't do anything?
-        }
-
+        else if (point == gap_start) { }
         else
             UNREACHABLE();
     }
 
-    bool buffer_chunk::insert_newline()
+    void buffer_chunk::move_gap_to_buffer_end()
     {
-        move_gap_to_current_line();
+        if (gap_end == NUMBER_OF_LINES_IN_BUFFER)
+            LOG_WARN("Gap already at the end.");
+        else
+        {
+            auto diff = NUMBER_OF_LINES_IN_BUFFER - gap_end;
+            auto dest_start = gap_start;
+            auto source_start = gap_end;
+            for (auto i = 0_u64; i < diff; ++i)
+                move_gap_bufffer(&lines[source_start + i], &lines[dest_start + i]);
+
+            gap_start += diff;
+            gap_end += diff;
+        }
+    }
+
+    // TODO: Dont use it. Use: get_line()->insert....
+    bool buffer_chunk::insert_character(size_t line, size_t point, uint8 character)
+    {
+        get_line(line)->insert_at_point(point, character);
+
+        if (get_line(line)->gap_start == nullptr)
+            PANIC("Nooooooo");
+
+        return true;
+    }
+
+    /// line - number of line after we insert newline.
+    bool buffer_chunk::insert_newline(size_t line)
+    {
+        move_gap_to_point(line + 1);
         gap_start++;
-        curr_line++;
-        lines[curr_line].initialize();
+        lines[line + 1].initialize();
 
         // TODO: Case when there is not enought memory.
         return true;
     }
 
-    bool buffer_chunk::insert_character(uint8 character)
+    bool buffer_chunk::delete_line(size_t line)
     {
-        if (curr_line < gap_start)
-            lines[curr_line].insert_at_point(character);
-        else
-            lines[curr_line].insert_at_point(character);
-        return true;
+        ASSERT(line > 0);
+        ASSERT(line < size());
+
+        move_gap_to_point(line + 1); // TODO(NEXT): What about it!
+        gap_start--;
+
+        return 0;
     }
 
-    int64 buffer_chunk::get_gap_size() const
+    size_t buffer_chunk::size() const
+    {
+        return NUMBER_OF_LINES_IN_BUFFER - gap_size();
+    }
+
+    size_t buffer_chunk::gap_size() const
     {
         return gap_end - gap_start;
     }
 
-    bool buffer_chunk::line_forward()
+    gap_buffer* buffer_chunk::get_line(size_t line)
     {
-#if 0
-        // If we are not at the end of buffer
-        if (curr_line < NUMBER_OF_LINES_IN_BUFFER)
-        {
-            // If we are at the last character before gap.
-            if (curr_line + 1 == gap_start) // TODO: This +1 might be wrong!
-            {
-                // If the gap is at the end of allocated memory we cannot move further.
-                if (gap_end == NUMBER_OF_LINES_IN_BUFFER - 1)
-                    return false;
-                // Otherwise we just throught the gap.
-                else
-                    curr_line = gap_end; // TODO(Cleanup): Is this legal -> gap_end + 1.
-            }
-            else
-                curr_line++;
-        }
+        ASSERT(line < size());
+
+        if (line < gap_start)
+            return &lines[line];
         else
-            return false;
-
-        return true;
-#else
-        auto next_line = curr_line + 1;
-        if(next_line == gap_start)
-            next_line = gap_end;
-
-        if(next_line < NUMBER_OF_LINES_IN_BUFFER)
-        {
-            curr_line = next_line;
-            return true;
-        }
-        else
-            return false;
-#endif
-    }
-
-    bool buffer_chunk::line_backward()
-    {
-#if 0
-        if (curr_line != 0)
-        {
-            if (curr_line == gap_end + 1) // TODO(Cleanup): Is this legal -> gap_end + 1.
-                curr_line = gap_start;
-            else
-                curr_line--;
-
-            return true;
-        }
-        else
-            return false;
-#else
-        auto next_line = curr_line - 1;
-        if(next_line == gap_end - 1)
-            next_line = gap_start - 1;
-
-        if(next_line >= 0)
-        {
-            curr_line = next_line;
-            return true;
-        }
-        else
-            return false;
-#endif
-    }
-
-    int64 buffer_chunk::get_size() const
-    {
-        PANIC("Not implemented yet.");
-        return 0;
-    }
-
-    int64 buffer_chunk::get_line_in_chunk() const
-    {
-        return NUMBER_OF_LINES_IN_BUFFER - get_gap_size();
+            return &lines[gap_end + (line - gap_start)];
     }
 
     void buffer_chunk::DEBUG_print_state() const
     {
         auto in_gap = false;
-        printf("Curr line: %d Gap: %d-%d\n", curr_line, gap_start, gap_end);
-        for (int i = 0; i < NUMBER_OF_LINES_IN_BUFFER; ++i)
+        printf("Gap: %ld-%ld\n", gap_start, gap_end);
+        for (auto i = 0_u64; i < NUMBER_OF_LINES_IN_BUFFER; ++i)
         {
             if (i == gap_start)
                 in_gap = true;
@@ -184,16 +131,16 @@ namespace editor::detail
 
             if (!in_gap)
             {
-                printf("%3d:[%3ld]  ", i, lines[i].get_size());
-                auto line = const_cast<unsigned char*>(lines[i].to_c_str());
+                printf("%3ld:[%3ld]  ", i, lines[i].size());
+                auto line = lines[i].to_c_str();
                 printf("%s", line);
                 free(static_cast<void*>(line));
                 printf("\n");
             }
             else if (in_gap && i - gap_start < 2)
-                printf("%3d:  ???\n", i);
+                printf("%3ld:  ???\n", i);
             else if (in_gap && i == gap_end - 1)
-                printf("      ...\n%3d:  ???\n", i);
+                printf("      ...\n%3ld:  ???\n", i);
         }
     }
 }
@@ -233,13 +180,12 @@ namespace editor
     static buffer_point create_buffer_point(buffer* buffer_ptr)
     {
         auto result = buffer_point {};
-        result.curr_chunk = buffer_ptr->chunks + 0;
-        result.line_in_chunk = 0; // Can be smaller integer.
-        result.index_in_line = 0;
-        result.buffer_ptr = buffer_ptr;
+        result.buffer_ptr = &buffer_ptr->chunks[0];
 
         return result;
     }
+
+#if 0
 
     void buffer_point::update_pos_in_line()
     {
@@ -247,9 +193,9 @@ namespace editor
     }
 
     // Line navigation and editing.
-    bool buffer_point::insert_character(uint8 character)
+    bool buffer_point::insert_character(size_t line, uint8 character)
     {
-        curr_chunk->insert_character(character);
+        curr_chunk->insert_character(line, character);
         return true; // TODO: For sure?
     }
 
@@ -350,6 +296,7 @@ namespace editor
         else
             return false;
     }
+#endif
 
 #if 0
     void buffer::update_pos_in_line()

@@ -13,36 +13,24 @@ namespace editor::detail
         // The size of the chunks places before in the chunk array in the chunks
         // array in buffer object.
         int64 prev_chunks_size;
-
-        int gap_start;
-        int gap_end;
-        int curr_line;
+        size_t gap_start;
+        size_t gap_end;
 
         void initailize();
 
         void set_current_line(int64 index);
-        void move_gap_to_current_line();
 
-        bool insert_character(uint8 character);
-        bool insert_newline();
-
-#if 0
+        void move_gap_to_point(size_t point);
         void move_gap_to_buffer_end();
-#endif
-        int64 get_gap_size() const;
 
-        // Only these should be used.
-        bool line_forward();
-        bool line_backward();
+        bool insert_character(size_t line, size_t point, uint8 character);
+        bool insert_newline(size_t line);
 
-        // Can exapnd buffer memory.
-#if 0
-        void insert_at_point(uint8 character);
-#endif
+        bool delete_line(size_t line);
 
-        // TODO(Cleaup): Change to size_t.
-        int64 get_size() const;
-        int64 get_line_in_chunk() const;
+        size_t size() const;
+        size_t gap_size() const;
+        gap_buffer* get_line(size_t line);
 
         void DEBUG_print_state() const;
     };
@@ -58,10 +46,15 @@ namespace editor
         int64 last_up_to_date_with_size_chunk;
 
         void initialize();
-
         void DEBUG_print_state() const;
     };
 
+    struct buffer_point
+    {
+        detail::buffer_chunk* buffer_ptr;
+    };
+
+#if 0
     // TODO: Move to another file.
     struct buffer_point
     {
@@ -74,7 +67,8 @@ namespace editor
         void update_pos_in_line();
 
         // Line navigation and editing.
-        bool insert_character(uint8 character);
+        bool insert_character
+        (uint8 character);
         bool insert_newline();
 
         bool move_forward_curr_line();
@@ -88,6 +82,7 @@ namespace editor
         bool move_line_up();
         bool move_line_down();
     };
+#endif
 
     static buffer_point create_buffer_point(buffer* buffer_ptr);
 }

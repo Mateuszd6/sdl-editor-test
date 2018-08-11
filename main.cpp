@@ -7,6 +7,10 @@
 #include "graphics/graphics.hpp"
 #include "platfrom/platform.hpp"
 
+// TODO: Remove these, as they are only for testing.
+auto curr_line = 0_u64;
+auto curr_idx = 0_u64;
+
 // TODO(Cleaup): Only for unity build.
 #include "text/gap_buffer.cpp"
 #include "editor/buffer.cpp"
@@ -624,8 +628,79 @@ static int HandleEvent(const SDL_Event &event)
                     break;
             }
 
-            auto succeeded = false;
             auto current_window = (editor::global::windows_arr + 1);
+#endif
+
+#if 1
+            if(character != '\0')
+                current_window->buf_point.buffer_ptr
+                    ->get_line(curr_line)
+                    ->insert_at_point(curr_idx++, character);
+
+            else if (backspace)
+            {
+                if(curr_idx > 0)
+                {
+                    current_window->buf_point.buffer_ptr
+                        ->get_line(curr_line)
+                        ->delete_char_backward(curr_idx--);
+                }
+                else if(curr_line > 0)
+                {
+                    current_window->buf_point.buffer_ptr
+                        ->delete_line(curr_line);
+                    curr_line--;
+                }
+                else
+                    LOG_WARN("Cannot delete backwards. No previous line.");
+            }
+
+            else if (del)
+                current_window->buf_point.buffer_ptr
+                    ->get_line(curr_line)
+                    ->delete_char_forward(curr_idx);
+
+            else if (enter)
+            {
+                current_window->buf_point.buffer_ptr
+                    ->insert_newline(curr_line++);
+                curr_idx = 0;
+            }
+
+            else if(arrow == 1)
+            {
+                auto line = current_window->buf_point.buffer_ptr->get_line(curr_line);
+                // Pointer can be at 'line->size()' as we might append to the current line.
+                ASSERT(curr_idx < line->size());
+                curr_idx++;
+            }
+
+            else if(arrow == 2)
+            {
+                // auto line = current_window->buf_point.buffer_ptr->get_line(curr_line);
+                ASSERT(curr_idx > 0);
+                curr_idx--;
+            }
+
+            else if(arrow == 3)
+            {
+                ASSERT(curr_line > 0);
+                curr_line--;
+                curr_idx = 0;
+            }
+
+            else if(arrow == 4)
+            {
+                ASSERT(curr_line < current_window->buf_point.buffer_ptr->size() - 1);
+                curr_line++;
+                curr_idx = 0;
+                // LOG_WARN("Moved line down: %d", current_window->buf_point.move_line_down());
+            }
+
+            printf("Line: %ld\nIndex: %ld\n", curr_line, curr_idx);
+            current_window->buf_point.buffer_ptr->DEBUG_print_state();
+#endif
+#if 0
             if(character != '\0')
                 current_window->buf_point.insert_character(character);
             else if(arrow == 1)
@@ -647,6 +722,7 @@ static int HandleEvent(const SDL_Event &event)
                     current_window->buf_point.insert_character(' ');
 
             current_window->buf_point.buffer_ptr->DEBUG_print_state();
+#endif
 #if 0
 
             else if(home)
@@ -667,7 +743,6 @@ static int HandleEvent(const SDL_Event &event)
                       ->buffer_ptr
                       ->lines[current_window->buffer_ptr->curr_line]
                       .get_gap_size());
-#endif
 #endif
         } break;
 
@@ -977,11 +1052,13 @@ int main(void)
         }
 #endif
 
+#if 0
         // system("clear");
         (::editor::global::windows_arr + ::editor::global::current_window_idx)
             ->buf_point
             .curr_chunk
             ->DEBUG_print_state();
+#endif
     }
 
     TTF_Quit();
