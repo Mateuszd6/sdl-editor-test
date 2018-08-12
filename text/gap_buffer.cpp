@@ -52,25 +52,15 @@ void gap_buffer::move_gap_to_buffer_end()
     }
 }
 
-// TODO(Testing): Battle-test this. Watch out for allocations!
-void gap_buffer::insert_at_point(size_t point, uint8 character) // LATIN2 characters only.
+void gap_buffer::reserve_gap(size_t n)
 {
-    ASSERT(point <= size());
-    move_gap_to_point(point);
-
-    *gap_start = character;
-    gap_start++;
-
-    // Expand memory if needed:
-    auto old_gap_size = gap_size();
-    if (old_gap_size <= GAP_BUF_MIN_SIZE_BEFORE_MEM_EXPAND)
+    if (gap_size() < n)
     {
         move_gap_to_buffer_end();
-        LOG_DEBUG("Doing realloc. Line has %lu characters, gap moved to the end.",
-                  gap_start-buffer);
+        LOG_DEBUG("Doing realloc.");
 
         auto gap_start_idx = gap_start - buffer;
-        auto new_gap_size = GAP_BUF_SIZE_AFTER_REALLOC - old_gap_size;
+        auto new_gap_size = n - gap_size();
         auto new_size = capacity + new_gap_size;
 
         // TODO(Testing): Test it with custom realloc that always moves the memory.
@@ -85,7 +75,24 @@ void gap_buffer::insert_at_point(size_t point, uint8 character) // LATIN2 charac
 
         capacity = new_size;
         gap_start = buffer + gap_start_idx;
-        gap_end = gap_start + new_gap_size;
+        gap_end = buffer + capacity;
+    }
+}
+
+// TODO(Testing): Battle-test this. Watch out for allocations!
+void gap_buffer::insert_at_point(size_t point, uint8 character) // LATIN2 characters only.
+{
+    ASSERT(point <= size());
+    move_gap_to_point(point);
+
+    *gap_start = character;
+    gap_start++;
+
+    // Expand memory if needed:
+    if (gap_size() <= GAP_BUF_MIN_SIZE_BEFORE_MEM_EXPAND)
+    {
+        reserve_gap(GAP_BUF_SIZE_AFTER_REALLOC);
+        LOG_WARN("Gap size after reallocing: %ld\n", gap_size());
     }
 
     ASSERT(gap_size() > GAP_BUF_MIN_SIZE_BEFORE_MEM_EXPAND);
@@ -134,6 +141,19 @@ size_t gap_buffer::size() const
 size_t gap_buffer::gap_size() const
 {
     return (gap_end - gap_start);
+}
+
+uint8 gap_buffer::get(size_t idx) const
+{
+    if (static_cast<ssize_t>(idx) < (gap_start - buffer))
+        return *(buffer + idx);
+    else
+        return *(gap_end + (idx - (gap_start - buffer)));
+}
+
+uint8 gap_buffer::operator [](size_t idx) const
+{
+    return get(idx);
 }
 
 int8* gap_buffer::to_c_str() const

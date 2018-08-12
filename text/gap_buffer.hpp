@@ -41,6 +41,10 @@ struct gap_buffer
     /// Place the gap and the end of tha buffer.
     void move_gap_to_buffer_end();
 
+    /// Set the gap size to 'n' characters if is is smaller. Does nothing if the
+    /// gap size is already greater or equal 'n'.
+    void reserve_gap(size_t n);
+
     /// Insert character at point. Will move the gap to the pointed location if
     /// necesarry. Can exapnd buffer memory.
     void insert_at_point(size_t point, uint8 character); // LATIN2 characters only.
@@ -62,6 +66,13 @@ struct gap_buffer
     /// Returns a size of the gap. Assertion: size() + gap_size() == capacity,
     /// for every vaild state of gap buffer.
     size_t gap_size() const;
+
+    /// Return the idx'th character in the buffer.
+    uint8 get(size_t idx) const;
+
+    /// Operator alias for the 'get' function. Returns the idx'th character in
+    /// the buffer.
+    uint8 operator [](size_t idx) const;
 
     /// Returns the c_str representation of the line. Allocates the memory for
     /// the string. The caller is repsonsible for freeing this memory.

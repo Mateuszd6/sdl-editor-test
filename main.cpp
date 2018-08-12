@@ -647,18 +647,46 @@ static int HandleEvent(const SDL_Event &event)
                 }
                 else if(curr_line > 0)
                 {
+                    auto line_size = current_window->buf_point.buffer_ptr
+                        ->get_line(curr_line - 1)
+                        ->size();
+
                     current_window->buf_point.buffer_ptr
                         ->delete_line(curr_line);
+
                     curr_line--;
+                    curr_idx = line_size;
                 }
                 else
                     LOG_WARN("Cannot delete backwards. No previous line.");
             }
 
             else if (del)
-                current_window->buf_point.buffer_ptr
-                    ->get_line(curr_line)
-                    ->delete_char_forward(curr_idx);
+            {
+                if(curr_idx < current_window->buf_point.buffer_ptr->get_line(curr_line)->size())
+                {
+                    current_window->buf_point.buffer_ptr
+                        ->get_line(curr_line)
+                        ->delete_char_forward(curr_idx);
+                }
+                else if(curr_line < current_window->buf_point.buffer_ptr->size() - 1)
+                {
+                    curr_line++;
+
+                    // TODO(Cleaup): This is copypaste.
+                    auto line_size = current_window->buf_point.buffer_ptr
+                        ->get_line(curr_line - 1)
+                        ->size();
+
+                    current_window->buf_point.buffer_ptr
+                        ->delete_line(curr_line);
+
+                    curr_line--;
+                    curr_idx = line_size;
+                }
+                else
+                    LOG_WARN("Cannot delete forward. No next line.");
+            }
 
             else if (enter)
             {
@@ -670,16 +698,35 @@ static int HandleEvent(const SDL_Event &event)
             else if(arrow == 1)
             {
                 auto line = current_window->buf_point.buffer_ptr->get_line(curr_line);
-                // Pointer can be at 'line->size()' as we might append to the current line.
-                ASSERT(curr_idx < line->size());
-                curr_idx++;
+                if(curr_idx < line->size())
+                {
+                    // Pointer can be at 'line->size()' as we might append to the current line.
+                    ASSERT(curr_idx < line->size());
+                    curr_idx++;
+                }
+                else if(curr_line < current_window->buf_point.buffer_ptr->size() - 1)
+                {
+                    curr_line++;
+                    curr_idx = 0;
+                }
+                else
+                    LOG_WARN("Cannot move right. No next character.");
             }
 
             else if(arrow == 2)
             {
-                // auto line = current_window->buf_point.buffer_ptr->get_line(curr_line);
-                ASSERT(curr_idx > 0);
-                curr_idx--;
+                if(curr_idx > 0)
+                {
+                    ASSERT(curr_idx > 0);
+                    curr_idx--;
+                }
+                else if(curr_line > 0)
+                {
+                    curr_line--;
+                    curr_idx = current_window->buf_point.buffer_ptr->get_line(curr_line)->size();
+                }
+                else
+                    LOG_WARN("Cannot move left. No previous character.");
             }
 
             else if(arrow == 3)
@@ -697,7 +744,12 @@ static int HandleEvent(const SDL_Event &event)
                 // LOG_WARN("Moved line down: %d", current_window->buf_point.move_line_down());
             }
 
-            printf("Line: %ld\nIndex: %ld\n", curr_line, curr_idx);
+            auto line = current_window->buf_point.buffer_ptr->get_line(curr_line);
+            printf("Line: %ld\nIndex: %ld\nValue: ", curr_line, curr_idx);
+            for (auto i = 0_u64; i < line->size(); ++i)
+                printf("%c", (*line)[i]);
+            printf("\n");
+
             current_window->buf_point.buffer_ptr->DEBUG_print_state();
 #endif
 #if 0
