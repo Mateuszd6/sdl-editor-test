@@ -691,7 +691,9 @@ static int HandleEvent(const SDL_Event &event)
             else if (enter)
             {
                 current_window->buf_point.buffer_ptr
-                    ->insert_newline(curr_line++);
+                    ->insert_newline_correct(curr_line, curr_idx);
+
+                curr_line++;
                 curr_idx = 0;
             }
 
@@ -731,25 +733,33 @@ static int HandleEvent(const SDL_Event &event)
 
             else if(arrow == 3)
             {
-                ASSERT(curr_line > 0);
-                curr_line--;
-                curr_idx = 0;
+                if(curr_line > 0)
+                {
+                    curr_line--;
+                    curr_idx = 0;
+                }
+                else
+                    LOG_WARN("Cannot goto previous line. No previous line.");
             }
 
             else if(arrow == 4)
             {
-                ASSERT(curr_line < current_window->buf_point.buffer_ptr->size() - 1);
-                curr_line++;
-                curr_idx = 0;
-                // LOG_WARN("Moved line down: %d", current_window->buf_point.move_line_down());
+                if(curr_line < current_window->buf_point.buffer_ptr->size() - 1)
+                {
+                    curr_line++;
+                    curr_idx = 0;
+                }
+                else
+                    LOG_WARN("Cannot goto next line. No next line.");
             }
 
-            auto line = current_window->buf_point.buffer_ptr->get_line(curr_line);
-            printf("Line: %ld\nIndex: %ld\nValue: ", curr_line, curr_idx);
-            for (auto i = 0_u64; i < line->size(); ++i)
-                printf("%c", (*line)[i]);
-            printf("\n");
+            else if(home)
+                curr_idx = 0;
 
+            else if(end)
+                curr_idx = current_window->buf_point.buffer_ptr->get_line(curr_line)->size();
+
+            printf("Line: %ld\nIndex: %ld", curr_line, curr_idx);
             current_window->buf_point.buffer_ptr->DEBUG_print_state();
 #endif
 #if 0

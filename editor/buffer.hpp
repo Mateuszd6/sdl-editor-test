@@ -25,6 +25,7 @@ namespace editor::detail
 
         bool insert_character(size_t line, size_t point, uint8 character);
         bool insert_newline(size_t line);
+        bool insert_newline_correct(size_t line, size_t point);
 
         bool delete_line(size_t line);
 

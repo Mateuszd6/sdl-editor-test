@@ -49,6 +49,9 @@ struct gap_buffer
     /// necesarry. Can exapnd buffer memory.
     void insert_at_point(size_t point, uint8 character); // LATIN2 characters only.
 
+    /// Insert character at point. This doesn't move a gap or expand memory.
+    void replace_at_point(size_t point, uint8 character);
+
     /// Delete the character currently on the given point. Will move the gap to
     /// the pointed location if necesarry. Can shrink buffer memory.
     bool delete_char_backward(size_t point);
@@ -58,6 +61,9 @@ struct gap_buffer
     /// Will move the gap to the pointed location if necesarry. Can shrink
     /// buffer memory.
     bool delete_char_forward(size_t point);
+
+    /// Efficiently clears the text to the end of the line by moving a gap.
+    bool delete_to_the_end_of_line(size_t point);
 
     /// Returns the number of characters stored in the buffer. Assertion: size()
     /// + gap_size() == capacity for every vaild state of gap buffer.

@@ -86,6 +86,27 @@ namespace editor::detail
         return true;
     }
 
+    bool buffer_chunk::insert_newline_correct(size_t line, size_t point)
+    {
+        ASSERT(line < size());
+
+        insert_newline(line);
+        auto edited_line = get_line(line);
+        auto created_line = get_line(line + 1);
+        ASSERT(point <= edited_line->size());
+
+
+        for(auto i = point; i < edited_line->size(); ++i)
+        {
+            printf("Moving: %c\n", edited_line->get(i));
+            created_line->insert_at_point(i - point, edited_line->get(i));
+        }
+
+        // TODO: Move gap to the end in the gap_buffer class.
+        edited_line->delete_to_the_end_of_line(point);
+        return true;
+    }
+
     bool buffer_chunk::delete_line(size_t line)
     {
         ASSERT(line > 0);

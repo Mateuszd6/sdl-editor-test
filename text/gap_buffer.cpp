@@ -98,6 +98,17 @@ void gap_buffer::insert_at_point(size_t point, uint8 character) // LATIN2 charac
     ASSERT(gap_size() > GAP_BUF_MIN_SIZE_BEFORE_MEM_EXPAND);
 }
 
+void gap_buffer::replace_at_point(size_t point, uint8 character)
+{
+    ASSERT(point < size());
+
+    auto pointer = (static_cast<ssize_t>(point) < (gap_start - buffer))
+        ? buffer + point
+        : gap_end + (point - (gap_start - buffer));
+
+    *pointer = character;
+}
+
 bool gap_buffer::delete_char_backward(size_t point)
 {
     ASSERT(0 < point && point <= size());
@@ -122,15 +133,18 @@ bool gap_buffer::delete_char_backward(size_t point)
 bool gap_buffer::delete_char_forward(size_t point)
 {
     ASSERT(point < size());
-
-#if 0
-    auto can_move_forward = (point + 1 < size());
-    return can_move_forward ? delete_char_backward(point + 1) : false;
-#else
-
     delete_char_backward(point + 1);
+
     return true;
-#endif
+}
+
+bool gap_buffer::delete_to_the_end_of_line(size_t point)
+{
+    ASSERT(point <= size());
+    move_gap_to_point(point);
+    gap_end = buffer + capacity;
+
+    return true;
 }
 
 size_t gap_buffer::size() const
