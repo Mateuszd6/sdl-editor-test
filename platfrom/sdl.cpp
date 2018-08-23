@@ -1,3 +1,4 @@
+
 #include <SDL.h>
 #include <SDL_ttf.h>
 
@@ -114,7 +115,8 @@ namespace platform
         auto text = line->to_c_str();
         graphics::print_text_line(window_ptr,
                                   line_nr,
-                                  reinterpret_cast<char const*>(text),current_idx);
+                                  reinterpret_cast<char const*>(text),
+                                  current_idx);
 
         std::free(reinterpret_cast<void*>(const_cast<int8*>(text)));
     }
@@ -162,7 +164,9 @@ namespace platform
             print_text_line_form_gap_buffer(gap_w,
                                             lines_printed,
                                             gap_w->buf_point.buffer_ptr->get_line(lines_printed),
-                                            lines_printed == curr_line ? curr_idx : -1);
+                                            (lines_printed == gap_w->buf_point.curr_line
+                                             ? gap_w->buf_point.curr_idx
+                                             : -1));
             lines_printed++;
         }
 

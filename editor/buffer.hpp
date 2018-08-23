@@ -53,6 +53,10 @@ namespace editor
     struct buffer_point
     {
         detail::buffer_chunk* buffer_ptr;
+        uint64 first_line;
+        uint64 curr_line;
+        uint64 curr_idx;
+        bool starting_from_top;
     };
 
 #if 0

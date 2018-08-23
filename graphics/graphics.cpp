@@ -34,10 +34,8 @@ namespace graphics
                 ::platform::get_letter_height()
             };
 
-            if (draw_rect.x + draw_rect.width >
-                window_ptr->position.x + window_ptr->position.width
-                || draw_rect.y + draw_rect.height >
-                window_ptr->position.y + window_ptr->position.height)
+            if (draw_rect.x + draw_rect.width > window_ptr->position.x + window_ptr->position.width
+                || draw_rect.y + draw_rect.height > window_ptr->position.y + window_ptr->position.height)
             {
                 break;
             }
@@ -45,6 +43,7 @@ namespace graphics
             ::platform::blit_letter(text_idx, draw_rect);
         }
 
+        // TODO: Make sure that the cursor fits in the window.
         // Draw a cursor.
         if (cursor_idx >= 0)
         {

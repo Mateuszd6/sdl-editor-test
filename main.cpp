@@ -7,10 +7,6 @@
 #include "graphics/graphics.hpp"
 #include "platfrom/platform.hpp"
 
-// TODO: Remove these, as they are only for testing.
-auto curr_line = 0_u64;
-auto curr_idx = 0_u64;
-
 // TODO(Cleaup): Only for unity build.
 #include "text/gap_buffer.cpp"
 #include "editor/buffer.cpp"
@@ -34,21 +30,20 @@ namespace editor_window_utility::detail
                            ? parent_window->splits_percentages[index_in_parent - 2]
                            : 0.0f);
 
-        // This does not work, because nested windows spoit them a lot.
-#if 0
+#if 0 // This does not work, because nested windows spoil them a lot.
         if (parent_window->split_windows[index_in_parent - 1]
             ->GetScreenPercForSplitType(window_split::WIN_SPLIT_HORIZONTAL) >= 0.2f)
 #endif
 
-            if (parent_window->splits_percentages[index_in_parent - 1] - prev_split
-                >= MIN_PERCANTAGE_WINDOW_SPLIT)
-            {
-                parent_window->splits_percentages[index_in_parent - 1] -= 0.01f;
-                parent_window->UpdateSize(parent_window->position);
-                parent_window->redraw(false); // Split window, cannot select.
-            }
-            else
-                LOG_WARN("Left window is too small!!");
+        if (parent_window->splits_percentages[index_in_parent - 1] - prev_split
+            >= MIN_PERCANTAGE_WINDOW_SPLIT)
+        {
+            parent_window->splits_percentages[index_in_parent - 1] -= 0.01f;
+            parent_window->UpdateSize(parent_window->position);
+            parent_window->redraw(false); // Split window, cannot select.
+        }
+        else
+            LOG_WARN("Left window is too small!!");
     }
 
     static void ResizeIthWindowRight(editor::window* parent_window,
@@ -143,16 +138,16 @@ namespace editor_window_utility
 static int ResizeWindow()
 {
     editor::global::windows_arr[0].UpdateSize(
-      graphics::rectangle {
+        graphics::rectangle {
             0, ::graphics::global::window_h - 17 + 1,
-            ::graphics::global::window_w, 17
-      });
+                ::graphics::global::window_w, 17
+                });
 
     editor::global::windows_arr[1].UpdateSize(
         graphics::rectangle {
             0, 0,
-            ::graphics::global::window_w, ::graphics::global::window_h - 17
-      });
+                ::graphics::global::window_w, ::graphics::global::window_h - 17
+                });
 
     return 0;
 }
@@ -634,28 +629,28 @@ static int HandleEvent(const SDL_Event &event)
 #if 1
             if(character != '\0')
                 current_window->buf_point.buffer_ptr
-                    ->get_line(curr_line)
-                    ->insert_at_point(curr_idx++, character);
+                    ->get_line(current_window->buf_point.curr_line)
+                    ->insert_at_point(current_window->buf_point.curr_idx++, character);
 
             else if (backspace)
             {
-                if(curr_idx > 0)
+                if(current_window->buf_point.curr_idx > 0)
                 {
                     current_window->buf_point.buffer_ptr
-                        ->get_line(curr_line)
-                        ->delete_char_backward(curr_idx--);
+                        ->get_line(current_window->buf_point.curr_line)
+                        ->delete_char_backward(current_window->buf_point.curr_idx--);
                 }
-                else if(curr_line > 0)
+                else if(current_window->buf_point.curr_line > 0)
                 {
                     auto line_size = current_window->buf_point.buffer_ptr
-                        ->get_line(curr_line - 1)
+                        ->get_line(current_window->buf_point.curr_line - 1)
                         ->size();
 
                     current_window->buf_point.buffer_ptr
-                        ->delete_line(curr_line);
+                        ->delete_line(current_window->buf_point.curr_line);
 
-                    curr_line--;
-                    curr_idx = line_size;
+                    current_window->buf_point.curr_line--;
+                    current_window->buf_point.curr_idx = line_size;
                 }
                 else
                     LOG_WARN("Cannot delete backwards. No previous line.");
@@ -663,26 +658,26 @@ static int HandleEvent(const SDL_Event &event)
 
             else if (del)
             {
-                if(curr_idx < current_window->buf_point.buffer_ptr->get_line(curr_line)->size())
+                if(current_window->buf_point.curr_idx < current_window->buf_point.buffer_ptr->get_line(current_window->buf_point.curr_line)->size())
                 {
                     current_window->buf_point.buffer_ptr
-                        ->get_line(curr_line)
-                        ->delete_char_forward(curr_idx);
+                        ->get_line(current_window->buf_point.curr_line)
+                        ->delete_char_forward(current_window->buf_point.curr_idx);
                 }
-                else if(curr_line < current_window->buf_point.buffer_ptr->size() - 1)
+                else if(current_window->buf_point.curr_line < current_window->buf_point.buffer_ptr->size() - 1)
                 {
-                    curr_line++;
+                    current_window->buf_point.curr_line++;
 
                     // TODO(Cleaup): This is copypaste.
                     auto line_size = current_window->buf_point.buffer_ptr
-                        ->get_line(curr_line - 1)
+                        ->get_line(current_window->buf_point.curr_line - 1)
                         ->size();
 
                     current_window->buf_point.buffer_ptr
-                        ->delete_line(curr_line);
+                        ->delete_line(current_window->buf_point.curr_line);
 
-                    curr_line--;
-                    curr_idx = line_size;
+                    current_window->buf_point.curr_line--;
+                    current_window->buf_point.curr_idx = line_size;
                 }
                 else
                     LOG_WARN("Cannot delete forward. No next line.");
@@ -691,25 +686,25 @@ static int HandleEvent(const SDL_Event &event)
             else if (enter)
             {
                 current_window->buf_point.buffer_ptr
-                    ->insert_newline_correct(curr_line, curr_idx);
+                    ->insert_newline_correct(current_window->buf_point.curr_line, current_window->buf_point.curr_idx);
 
-                curr_line++;
-                curr_idx = 0;
+                current_window->buf_point.curr_line++;
+                current_window->buf_point.curr_idx = 0;
             }
 
             else if(arrow == 1)
             {
-                auto line = current_window->buf_point.buffer_ptr->get_line(curr_line);
-                if(curr_idx < line->size())
+                auto line = current_window->buf_point.buffer_ptr->get_line(current_window->buf_point.curr_line);
+                if(current_window->buf_point.curr_idx < line->size())
                 {
                     // Pointer can be at 'line->size()' as we might append to the current line.
-                    ASSERT(curr_idx < line->size());
-                    curr_idx++;
+                    ASSERT(current_window->buf_point.curr_idx < line->size());
+                    current_window->buf_point.curr_idx++;
                 }
-                else if(curr_line < current_window->buf_point.buffer_ptr->size() - 1)
+                else if(current_window->buf_point.curr_line < current_window->buf_point.buffer_ptr->size() - 1)
                 {
-                    curr_line++;
-                    curr_idx = 0;
+                    current_window->buf_point.curr_line++;
+                    current_window->buf_point.curr_idx = 0;
                 }
                 else
                     LOG_WARN("Cannot move right. No next character.");
@@ -717,15 +712,15 @@ static int HandleEvent(const SDL_Event &event)
 
             else if(arrow == 2)
             {
-                if(curr_idx > 0)
+                if(current_window->buf_point.curr_idx > 0)
                 {
-                    ASSERT(curr_idx > 0);
-                    curr_idx--;
+                    ASSERT(current_window->buf_point.curr_idx > 0);
+                    current_window->buf_point.curr_idx--;
                 }
-                else if(curr_line > 0)
+                else if(current_window->buf_point.curr_line > 0)
                 {
-                    curr_line--;
-                    curr_idx = current_window->buf_point.buffer_ptr->get_line(curr_line)->size();
+                    current_window->buf_point.curr_line--;
+                    current_window->buf_point.curr_idx = current_window->buf_point.buffer_ptr->get_line(current_window->buf_point.curr_line)->size();
                 }
                 else
                     LOG_WARN("Cannot move left. No previous character.");
@@ -733,10 +728,10 @@ static int HandleEvent(const SDL_Event &event)
 
             else if(arrow == 3)
             {
-                if(curr_line > 0)
+                if(current_window->buf_point.curr_line > 0)
                 {
-                    curr_line--;
-                    curr_idx = 0;
+                    current_window->buf_point.curr_line--;
+                    current_window->buf_point.curr_idx = 0;
                 }
                 else
                     LOG_WARN("Cannot goto previous line. No previous line.");
@@ -744,22 +739,22 @@ static int HandleEvent(const SDL_Event &event)
 
             else if(arrow == 4)
             {
-                if(curr_line < current_window->buf_point.buffer_ptr->size() - 1)
+                if(current_window->buf_point.curr_line < current_window->buf_point.buffer_ptr->size() - 1)
                 {
-                    curr_line++;
-                    curr_idx = 0;
+                    current_window->buf_point.curr_line++;
+                    current_window->buf_point.curr_idx = 0;
                 }
                 else
                     LOG_WARN("Cannot goto next line. No next line.");
             }
 
             else if(home)
-                curr_idx = 0;
+                current_window->buf_point.curr_idx = 0;
 
             else if(end)
-                curr_idx = current_window->buf_point.buffer_ptr->get_line(curr_line)->size();
+                current_window->buf_point.curr_idx = current_window->buf_point.buffer_ptr->get_line(current_window->buf_point.curr_line)->size();
 
-            printf("Line: %ld\nIndex: %ld", curr_line, curr_idx);
+            printf("Line: %ld\nIndex: %ld", current_window->buf_point.curr_line, current_window->buf_point.curr_idx);
             current_window->buf_point.buffer_ptr->DEBUG_print_state();
 #endif
 #if 0
