@@ -1,4 +1,3 @@
-
 #include <SDL.h>
 #include <SDL_ttf.h>
 
@@ -152,22 +151,34 @@ namespace platform
         main_window->redraw(editor::global::current_window_idx == 1);
 
         auto gap_w = editor::global::windows_arr + 1;
-        auto lines_printed = 0_u64; // TODO(NEXT)!
-        for(auto i = 0_u64; i < NUMBER_OF_LINES_IN_BUFFER; ++i)
-        {
-            if (i ==  gap_w->buf_point.buffer_ptr->gap_start)
-            {
-                i = gap_w->buf_point.buffer_ptr->gap_end - 1;
-                continue;
-            }
 
+        // TODO: There is still no space for the cutted line, and it can easilly be displayed here.
+        auto number_of_displayed_lines = static_cast<uint64>(
+            (gap_w->position.height - 2) / ::platform::get_letter_height());
+
+        LOG_DEBUG("Number of lines in the canvas: %ld. Starting from: %lu(%c), line: %lu)",
+                  number_of_displayed_lines,
+                  gap_w->buf_point.first_line,
+                  gap_w->buf_point.starting_from_top ? 'v' : '^',
+                  gap_w->buf_point.curr_line);
+
+        auto difference = (gap_w->buf_point.starting_from_top
+                           ? gap_w->buf_point.curr_line - gap_w->buf_point.first_line
+                           : gap_w->buf_point.first_line - gap_w->buf_point.curr_line);
+
+        if(difference >= number_of_displayed_lines)
+            gap_w->buf_point.first_line = gap_w->buf_point.curr_line - (number_of_displayed_lines - 1);
+
+        auto lines_printed = 0_u64;
+        for(auto i = gap_w->buf_point.first_line; i < gap_w->buf_point.buffer_ptr->size(); ++i)
+        {
             print_text_line_form_gap_buffer(gap_w,
-                                            lines_printed,
-                                            gap_w->buf_point.buffer_ptr->get_line(lines_printed),
-                                            (lines_printed == gap_w->buf_point.curr_line
-                                             ? gap_w->buf_point.curr_idx
-                                             : -1));
-            lines_printed++;
+                                            lines_printed++,
+                                            gap_w->buf_point.buffer_ptr->get_line(i),
+                                            i == gap_w->buf_point.curr_line ? gap_w->buf_point.curr_idx : -1);
+
+            if(lines_printed >= number_of_displayed_lines)
+                break;
         }
 
 #if 0

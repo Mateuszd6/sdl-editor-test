@@ -213,6 +213,10 @@ namespace editor
     {
         auto result = buffer_point {};
         result.buffer_ptr = &buffer_ptr->chunks[0];
+	result.first_line = 0;
+	result.curr_line = 0;
+	result.curr_idx = 0;
+	result.starting_from_top = true;
 
         return result;
     }
