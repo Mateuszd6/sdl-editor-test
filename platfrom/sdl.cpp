@@ -151,6 +151,7 @@ namespace platform
         main_window->redraw(editor::global::current_window_idx == 1);
 
         auto gap_w = editor::global::windows_arr + 1;
+        auto b_point = &gap_w->buf_point;
 
         // TODO: There is still no space for the cutted line, and it can easilly be displayed here.
         auto number_of_displayed_lines = static_cast<uint64>(
@@ -158,28 +159,97 @@ namespace platform
 
         LOG_DEBUG("Number of lines in the canvas: %ld. Starting from: %lu(%c), line: %lu)",
                   number_of_displayed_lines,
-                  gap_w->buf_point.first_line,
-                  gap_w->buf_point.starting_from_top ? 'v' : '^',
-                  gap_w->buf_point.curr_line);
+                  b_point->first_line,
+                  b_point->starting_from_top ? 'v' : '^',
+                  b_point->curr_line);
 
-        auto difference = (gap_w->buf_point.starting_from_top
-                           ? gap_w->buf_point.curr_line - gap_w->buf_point.first_line
-                           : gap_w->buf_point.first_line - gap_w->buf_point.curr_line);
+#if 1
+        auto difference = (b_point->starting_from_top
+                           ? static_cast<int64>(b_point->curr_line) - static_cast<int64>(b_point->first_line)
+                           : static_cast<int64>(b_point->first_line) - static_cast<int64>(b_point->curr_line));
+#else
+        auto difference = (b_point->curr_line > b_point->first_line
+                           ? b_point->curr_line - b_point->first_line
+                           : b_point->first_line - b_point->curr_line);
+#endif
 
-        if(difference >= number_of_displayed_lines)
-            gap_w->buf_point.first_line = gap_w->buf_point.curr_line - (number_of_displayed_lines - 1);
+        LOG_TRACE("____ CURR: %lu, FIRST LINE: %lu, DIFF: %ld ____",
+                  b_point->curr_line,
+                  b_point->first_line,
+                  difference);
 
-        auto lines_printed = 0_u64;
-        for(auto i = gap_w->buf_point.first_line; i < gap_w->buf_point.buffer_ptr->size(); ++i)
+#if 0
+        // TODO(NEXT): This is the place where orientation
+        //             (buf_point.starting_from_top) should be changed.
+        auto have_to_scroll = (b_point->starting_from_top
+                               ? difference >= static_cast<int64>(number_of_displayed_lines)
+                               : difference < 0);
+        if(have_to_scroll)
         {
-            print_text_line_form_gap_buffer(gap_w,
-                                            lines_printed++,
-                                            gap_w->buf_point.buffer_ptr->get_line(i),
-                                            i == gap_w->buf_point.curr_line ? gap_w->buf_point.curr_idx : -1);
+#if 0
+            b_point.first_line = b_point.curr_line - (number_of_displayed_lines - 1);
+#else
+            if(b_point->starting_from_top)
+            {
+                b_point->starting_from_top = false;
+                b_point->first_line = b_point->curr_line;
+            }
+            else
+            {
 
-            if(lines_printed >= number_of_displayed_lines)
+            }
+#endif
+        }
+#else
+        if(b_point->curr_line < b_point->first_line)
+        {
+            b_point->starting_from_top = true;
+            b_point->first_line = b_point->curr_line;
+        }
+        else if(b_point->curr_line >= b_point->first_line + number_of_displayed_lines - 1)
+        {
+            b_point->starting_from_top = false;
+            b_point->first_line = b_point->curr_line - number_of_displayed_lines + 1;
+        }
+#endif
+
+#if 0
+        auto lines_printed = b_point->starting_from_top ? 0_u64 : number_of_displayed_lines;
+        for(auto i = b_point->first_line;
+            0 <= i && i < b_point->buffer_ptr->size();
+            b_point->starting_from_top ? ++i : --i)
+        {
+            LOG_TRACE("Printing line [%c]: %lu", b_point->starting_from_top ? 'v' : '^', lines_printed);
+            print_text_line_form_gap_buffer(gap_w,
+                                            b_point->starting_from_top ? lines_printed++ : lines_printed--,
+                                            b_point->buffer_ptr->get_line(i),
+                                            i == b_point->curr_line ? b_point->curr_idx : -1);
+
+            auto should_break = (b_point->starting_from_top
+                                 ? (lines_printed >= number_of_displayed_lines)
+                                 : (lines_printed < 0));
+            if(should_break)
                 break;
         }
+#else
+        auto lines_printed = 0_u64;
+        for(auto i = b_point->first_line;
+            i < b_point->buffer_ptr->size();
+            ++i)
+        {
+            LOG_TRACE("Printing line [%c]: %lu", b_point->starting_from_top ? 'v' : '^', lines_printed);
+            print_text_line_form_gap_buffer(gap_w,
+                                            lines_printed++,
+                                            b_point->buffer_ptr->get_line(i),
+                                            i == b_point->curr_line ? b_point->curr_idx : -1);
+
+            auto should_break = (b_point->starting_from_top
+                                 ? (lines_printed >= number_of_displayed_lines)
+                                 : (lines_printed < 0));
+            if(should_break)
+                break;
+        }
+#endif
 
 #if 0
         auto gap_w = editor::global::windows_arr + 1;

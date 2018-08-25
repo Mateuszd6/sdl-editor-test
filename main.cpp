@@ -754,7 +754,57 @@ static int HandleEvent(const SDL_Event &event)
             else if(end)
                 current_window->buf_point.curr_idx = current_window->buf_point.buffer_ptr->get_line(current_window->buf_point.curr_line)->size();
 
-            printf("Line: %ld\nIndex: %ld", current_window->buf_point.curr_line, current_window->buf_point.curr_idx);
+            else if(test_operation)
+            {
+                current_window->buf_point.buffer_ptr
+                        ->get_line(current_window->buf_point.curr_line)
+                        ->insert_at_point(current_window->buf_point.curr_idx++, '0');
+
+                // Insert newline
+                {
+                    current_window->buf_point.buffer_ptr
+                        ->insert_newline_correct(current_window->buf_point.curr_line, current_window->buf_point.curr_idx);
+
+                    current_window->buf_point.curr_line++;
+                    current_window->buf_point.curr_idx = 0;
+                }
+
+                for(auto i = 80; i > 0; --i)
+                {
+                    auto m = i;
+                    while(m)
+                    {
+                        current_window->buf_point.buffer_ptr
+                            ->get_line(current_window->buf_point.curr_line)
+                            ->insert_at_point(current_window->buf_point.curr_idx++, '0' + (m % 10));
+                        current_window->buf_point.curr_idx = 0;
+                        m /= 10;
+                    }
+
+                    // Move to the beginning of prev. line
+                    {
+                        current_window->buf_point.curr_line--;
+                        current_window->buf_point.curr_idx = current_window
+                            ->buf_point.buffer_ptr
+                            ->get_line(current_window->buf_point.curr_line)
+                            ->size();
+                    }
+
+                    // Insert newline
+                    {
+                        current_window->buf_point.buffer_ptr
+                            ->insert_newline_correct(current_window->buf_point.curr_line,
+                                                     current_window->buf_point.curr_idx);
+
+                        current_window->buf_point.curr_line++;
+                        current_window->buf_point.curr_idx = 0;
+                    }
+                }
+            }
+
+            printf("Line: %ld\nIndex: %ld",
+                   current_window->buf_point.curr_line,
+                   current_window->buf_point.curr_idx);
             current_window->buf_point.buffer_ptr->DEBUG_print_state();
 #endif
 #if 0
