@@ -96,26 +96,32 @@ namespace platform
         }
     }
 
+    // TODO(Cleanup): Make them more safe. The size should be some global setting.
     static int get_letter_height()
     {
         return global::alphabet[1]->h;
     }
 
+    // TODO(Cleanup): Make them more safe. The size should be some global setting.
     static int get_letter_width()
     {
         return global::alphabet[1]->w;
     }
 
     static void print_text_line_form_gap_buffer(editor::window const* window_ptr,
-                                                int line_nr,
                                                 gap_buffer const* line,
-                                                int current_idx)
+                                                int line_nr,
+                                                int current_idx,
+                                                int first_line_additional_offset,
+                                                bool start_from_top)
     {
         auto text = line->to_c_str();
         graphics::print_text_line(window_ptr,
-                                  line_nr,
                                   reinterpret_cast<char const*>(text),
-                                  current_idx);
+                                  line_nr,
+                                  current_idx,
+                                  first_line_additional_offset,
+                                  start_from_top);
 
         std::free(reinterpret_cast<void*>(const_cast<int8*>(text)));
     }
@@ -206,7 +212,7 @@ namespace platform
             b_point->starting_from_top = true;
             b_point->first_line = b_point->curr_line;
         }
-        else if(b_point->curr_line >= b_point->first_line + number_of_displayed_lines - 1)
+        else if(b_point->curr_line >= b_point->first_line + number_of_displayed_lines)
         {
             b_point->starting_from_top = false;
             b_point->first_line = b_point->curr_line - number_of_displayed_lines + 1;
@@ -233,21 +239,51 @@ namespace platform
         }
 #else
         auto lines_printed = 0_u64;
-        for(auto i = b_point->first_line;
+        auto first_line_offset = (b_point->starting_from_top
+                                  ? 0
+                                  : (gap_w->position.height - 2) -
+                                      (::platform::get_letter_height() * (number_of_displayed_lines + 1)));
+
+    for(auto i = b_point->first_line + (b_point->starting_from_top ? 0 : -1);
             i < b_point->buffer_ptr->size();
             ++i)
         {
             LOG_TRACE("Printing line [%c]: %lu", b_point->starting_from_top ? 'v' : '^', lines_printed);
             print_text_line_form_gap_buffer(gap_w,
-                                            lines_printed++,
                                             b_point->buffer_ptr->get_line(i),
-                                            i == b_point->curr_line ? b_point->curr_idx : -1);
+                                            lines_printed++,
+                                            i == b_point->curr_line ? b_point->curr_idx : -1,
+                                            first_line_offset,
+                                            b_point->starting_from_top);
 
-            auto should_break = (b_point->starting_from_top
+            auto should_break =
+#if 0
+                (b_point->starting_from_top
                                  ? (lines_printed >= number_of_displayed_lines)
                                  : (lines_printed < 0));
+#else
+
+                lines_printed >= number_of_displayed_lines + 1;
+#endif
+
             if(should_break)
                 break;
+        }
+#endif
+
+#if 0
+        if (!b_point->starting_from_top)
+        {
+            ASSERT(b_point->first_line > 0);
+            print_text_line_form_gap_buffer(gap_w,
+                                            b_point->buffer_ptr->get_line(b_point->first_line - 1),
+                                            0,
+                                            -1,
+                                            -platform::get_letter_height() / 2,
+                                            b_point->starting_from_top);
+        }
+        else
+        {
         }
 #endif
 

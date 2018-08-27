@@ -19,25 +19,42 @@ namespace graphics
     }
 
     static void print_text_line(editor::window const* window_ptr,
-                                int line_nr, // First visible line of the buffer is 0.
                                 char const* text,
-                                int cursor_idx) // gap_buffer const* line
+                                int line_nr, // First visible line of the buffer is 0.
+                                int cursor_idx, // gap_buffer const* line
+                                int first_line_offset,
+                                bool start_from_top)
     {
+        auto horizontal_offset = 2;
+        auto vertical_offest = 2 + first_line_offset;
+
         for (auto i = 0; text[i]; ++i)
         {
             auto text_idx = static_cast<int>(text[i]);
             auto draw_rect = rectangle {
                 // Only for monospace fonts.
-                window_ptr->position.x + 2 + ::platform::get_letter_width() * i,
-                window_ptr->position.y + 2 + ::platform::get_letter_height() * line_nr,
+                window_ptr->position.x + horizontal_offset + ::platform::get_letter_width() * i,
+                window_ptr->position.y + vertical_offest + ::platform::get_letter_height() * line_nr,
                 ::platform::get_letter_width(),
                 ::platform::get_letter_height()
             };
 
+#if false
             if (draw_rect.x + draw_rect.width > window_ptr->position.x + window_ptr->position.width
                 || draw_rect.y + draw_rect.height > window_ptr->position.y + window_ptr->position.height)
             {
                 break;
+            }
+#endif
+
+            if (first_line_offset < 0)
+            {
+
+                LOG_TRACE("BLITTING CUTTED LETTER AT RECT (%d;%d) (%d;%d)",
+                          draw_rect.x,
+                          draw_rect.y,
+                          draw_rect.width,
+                          draw_rect.height);
             }
 
             ::platform::blit_letter(text_idx, draw_rect);
@@ -48,8 +65,8 @@ namespace graphics
         if (cursor_idx >= 0)
         {
             auto rect = rectangle {
-                window_ptr->position.x + 2 + ::platform::get_letter_width() * cursor_idx,
-                window_ptr->position.y + 2 + ::platform::get_letter_height() * line_nr,
+                window_ptr->position.x + horizontal_offset + ::platform::get_letter_width() * cursor_idx,
+                window_ptr->position.y + vertical_offest + ::platform::get_letter_height() * line_nr,
                 2,
                 ::platform::get_letter_height()
             };
