@@ -163,50 +163,12 @@ namespace platform
         auto number_of_displayed_lines = static_cast<uint64>(
             (gap_w->position.height - 2) / ::platform::get_letter_height());
 
-        LOG_DEBUG("Number of lines in the canvas: %ld. Starting from: %lu(%c), line: %lu)",
-                  number_of_displayed_lines,
-                  b_point->first_line,
-                  b_point->starting_from_top ? 'v' : '^',
-                  b_point->curr_line);
-
-#if 1
+#if 0
         auto difference = (b_point->starting_from_top
                            ? static_cast<int64>(b_point->curr_line) - static_cast<int64>(b_point->first_line)
                            : static_cast<int64>(b_point->first_line) - static_cast<int64>(b_point->curr_line));
-#else
-        auto difference = (b_point->curr_line > b_point->first_line
-                           ? b_point->curr_line - b_point->first_line
-                           : b_point->first_line - b_point->curr_line);
 #endif
 
-        LOG_TRACE("____ CURR: %lu, FIRST LINE: %lu, DIFF: %ld ____",
-                  b_point->curr_line,
-                  b_point->first_line,
-                  difference);
-
-#if 0
-        // TODO(NEXT): This is the place where orientation
-        //             (buf_point.starting_from_top) should be changed.
-        auto have_to_scroll = (b_point->starting_from_top
-                               ? difference >= static_cast<int64>(number_of_displayed_lines)
-                               : difference < 0);
-        if(have_to_scroll)
-        {
-#if 0
-            b_point.first_line = b_point.curr_line - (number_of_displayed_lines - 1);
-#else
-            if(b_point->starting_from_top)
-            {
-                b_point->starting_from_top = false;
-                b_point->first_line = b_point->curr_line;
-            }
-            else
-            {
-
-            }
-#endif
-        }
-#else
         if(b_point->curr_line < b_point->first_line)
         {
             b_point->starting_from_top = true;
@@ -217,38 +179,17 @@ namespace platform
             b_point->starting_from_top = false;
             b_point->first_line = b_point->curr_line - number_of_displayed_lines + 1;
         }
-#endif
 
-#if 0
-        auto lines_printed = b_point->starting_from_top ? 0_u64 : number_of_displayed_lines;
-        for(auto i = b_point->first_line;
-            0 <= i && i < b_point->buffer_ptr->size();
-            b_point->starting_from_top ? ++i : --i)
-        {
-            LOG_TRACE("Printing line [%c]: %lu", b_point->starting_from_top ? 'v' : '^', lines_printed);
-            print_text_line_form_gap_buffer(gap_w,
-                                            b_point->starting_from_top ? lines_printed++ : lines_printed--,
-                                            b_point->buffer_ptr->get_line(i),
-                                            i == b_point->curr_line ? b_point->curr_idx : -1);
-
-            auto should_break = (b_point->starting_from_top
-                                 ? (lines_printed >= number_of_displayed_lines)
-                                 : (lines_printed < 0));
-            if(should_break)
-                break;
-        }
-#else
         auto lines_printed = 0_u64;
         auto first_line_offset = (b_point->starting_from_top
                                   ? 0
                                   : (gap_w->position.height - 2) -
-                                      (::platform::get_letter_height() * (number_of_displayed_lines + 1)));
+                                  (::platform::get_letter_height() * (number_of_displayed_lines + 1)));
 
-    for(auto i = b_point->first_line + (b_point->starting_from_top ? 0 : -1);
+        for(auto i = b_point->first_line + (b_point->starting_from_top ? 0 : -1);
             i < b_point->buffer_ptr->size();
             ++i)
         {
-            LOG_TRACE("Printing line [%c]: %lu", b_point->starting_from_top ? 'v' : '^', lines_printed);
             print_text_line_form_gap_buffer(gap_w,
                                             b_point->buffer_ptr->get_line(i),
                                             lines_printed++,
@@ -256,76 +197,11 @@ namespace platform
                                             first_line_offset,
                                             b_point->starting_from_top);
 
-            auto should_break =
-#if 0
-                (b_point->starting_from_top
-                                 ? (lines_printed >= number_of_displayed_lines)
-                                 : (lines_printed < 0));
-#else
-
-                lines_printed >= number_of_displayed_lines + 1;
-#endif
-
+            // TODO: Check if this is correct in both cases.
+            auto should_break = lines_printed >= number_of_displayed_lines + 1;
             if(should_break)
                 break;
         }
-#endif
-
-#if 0
-        if (!b_point->starting_from_top)
-        {
-            ASSERT(b_point->first_line > 0);
-            print_text_line_form_gap_buffer(gap_w,
-                                            b_point->buffer_ptr->get_line(b_point->first_line - 1),
-                                            0,
-                                            -1,
-                                            -platform::get_letter_height() / 2,
-                                            b_point->starting_from_top);
-        }
-        else
-        {
-        }
-#endif
-
-#if 0
-        auto gap_w = editor::global::windows_arr + 1;
-        for (auto i = 0_u64; i < 128_u64; ++i)
-        {
-            print_text_line_form_gap_buffer(
-                gap_w,
-                i,
-                gap_w->buffer_ptr->lines + i,
-                (gap_w->buffer_ptr->curr_line == i ? gap_w->buffer_ptr->curr_index : -1));
-        }
-
-        if (!(editor::global::windows_arr + 1)->contains_buffer)
-        {
-            if ((editor::global::windows_arr + 2)->contains_buffer
-                && (editor::global::windows_arr + 4)->contains_buffer
-                && (editor::global::windows_arr + 5)->contains_buffer)
-            {
-                auto left_w = editor::global::windows_arr + 2;
-                auto right_w = editor::global::windows_arr + 4;
-                auto gap_w = editor::global::windows_arr + 1;
-
-                ::graphics::print_text_line(left_w, 0, "#include <iostream>", -1);
-                ::graphics::print_text_line(left_w, 2, "int main()", -1);
-                ::graphics::print_text_line(left_w, 3, "{", -1);
-                ::graphics::print_text_line(left_w, 4, "    const auto foobar = \"Hello world!\";", -1);
-                ::graphics::print_text_line(left_w, 5, "    std::cout << foobar << endl;", -1);
-                ::graphics::print_text_line(left_w, 7, "    return 0;", -1);
-                ::graphics::print_text_line(left_w, 8, "}", -1);
-
-                ::graphics::print_text_line(right_w, 0, "<!DOCTYPE html>", -1);
-                ::graphics::print_text_line(right_w, 1, "<html>", -1);
-                ::graphics::print_text_line(right_w, 2, "  <body>", -1);
-                ::graphics::print_text_line(right_w, 3, "    <h1>Example heading</h1>", -1);
-                ::graphics::print_text_line(right_w, 4, "    <p>Example paragraph</p>", -1);
-                ::graphics::print_text_line(right_w, 5, "  </body>", -1);
-                ::graphics::print_text_line(right_w, 6, "</html>", -1);
-            }
-        }
-#endif
 
         SDL_UpdateWindowSurface(::platform::global::window);
         return 0;

@@ -1150,15 +1150,6 @@ int main(void)
         ASSERT(Validate(::editor::global::windows_arr + 1));
 #endif
 
-        // Some printing stuff:
-        // DFS traverse the windows tree, and print the current window state:
-#if 0
-        {
-            DEBUG_PrintWindowsState(global::windows_arr + 1);
-            printf("\n");
-        }
-#endif
-
 #if 0
         // system("clear");
         (::editor::global::windows_arr + ::editor::global::current_window_idx)

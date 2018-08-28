@@ -97,10 +97,7 @@ namespace editor::detail
 
 
         for(auto i = point; i < edited_line->size(); ++i)
-        {
-            printf("Moving: %c\n", edited_line->get(i));
             created_line->insert_at_point(i - point, edited_line->get(i));
-        }
 
         // TODO: Move gap to the end in the gap_buffer class.
         edited_line->delete_to_the_end_of_line(point);
@@ -204,7 +201,6 @@ namespace editor
     {
         for (int i = 0; i < chunks_size; ++i)
         {
-            printf("--> chunk %d\n", i);
             chunks[i].DEBUG_print_state();
         }
     }
@@ -213,10 +209,10 @@ namespace editor
     {
         auto result = buffer_point {};
         result.buffer_ptr = &buffer_ptr->chunks[0];
-	result.first_line = 0;
-	result.curr_line = 0;
-	result.curr_idx = 0;
-	result.starting_from_top = true;
+        result.first_line = 0;
+        result.curr_line = 0;
+        result.curr_idx = 0;
+        result.starting_from_top = true;
 
         return result;
     }

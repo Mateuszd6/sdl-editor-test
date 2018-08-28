@@ -39,23 +39,14 @@ namespace graphics
                 ::platform::get_letter_height()
             };
 
-#if false
+#if 0
             if (draw_rect.x + draw_rect.width > window_ptr->position.x + window_ptr->position.width
                 || draw_rect.y + draw_rect.height > window_ptr->position.y + window_ptr->position.height)
             {
+                LOG_WARN("Blitting outside the rect: %s", text);
                 break;
             }
 #endif
-
-            if (first_line_offset < 0)
-            {
-
-                LOG_TRACE("BLITTING CUTTED LETTER AT RECT (%d;%d) (%d;%d)",
-                          draw_rect.x,
-                          draw_rect.y,
-                          draw_rect.width,
-                          draw_rect.height);
-            }
 
             ::platform::blit_letter(text_idx, draw_rect);
         }
