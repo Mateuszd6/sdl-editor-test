@@ -8,7 +8,7 @@ namespace editor
 {
     struct buffer
     {
-        gap_buffer lines[NUMBER_OF_LINES_IN_BUFFER];
+        gap_buffer* lines;
 
         // The size of the chunks places before in the chunk array in the chunks
         // array in buffer object.

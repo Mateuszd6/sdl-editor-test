@@ -11,6 +11,7 @@ namespace editor
     void buffer::initialize()
     {
         prev_chunks_size = 0;
+        lines = static_cast<gap_buffer*>(malloc(sizeof(gap_buffer) * NUMBER_OF_LINES_IN_BUFFER));
         gap_start = 1;
         gap_end = NUMBER_OF_LINES_IN_BUFFER;
 
@@ -174,9 +175,12 @@ namespace editor
     }
 }
 
+#include "cstdio"
+
 namespace editor
 {
     // TODO(Docs): Summary!
+    // TODO(Cleaup): Move to buffer file.
     static buffer* CreateNewBuffer()
     {
         auto result = global::buffers + global::number_of_buffers;
@@ -184,6 +188,54 @@ namespace editor
         result->initialize();
 
         return result;
+    }
+
+    // TODO(NEXT): Implement better file API than this horrible c++ streams.
+    static buffer* create_buffer_from_file(char const* file_path)
+    {
+        auto file = fopen(file_path, "r");
+
+        auto line_capacity = 128_u64;
+        auto line_size = 0_u64;
+        auto line = static_cast<int8*>(malloc(sizeof(int8) * line_capacity));
+        line[0] = 0_u64;
+
+        auto c = EOF;
+        do
+        {
+            c = fgetc(file);
+
+            if (c == EOF)
+                break;
+            else if(c == '\n')
+            {
+                LOG_WARN("LINE: %s", line);
+                line_size = 0;
+                line[0] = '\0';
+                continue;
+            }
+            else if (line_size + 1 >= line_capacity)
+            {
+                line_capacity *= 2;
+                // TODO: Fix common realloc mistake!
+                line = static_cast<int8*>(realloc(line, sizeof(int8) * line_capacity));
+                ASSERT(line);
+            }
+
+            line[line_size++] = c;
+            line[line_size] = '\0';
+        } while(c != EOF);
+
+        LOG_WARN("LINE: %s", line);
+
+        // may check feof here to make a difference between eof and io failure
+        // -- network timeout for instance
+        fclose(file);
+        free(line);
+
+        LOG_DEBUG("DONE");
+
+        return CreateNewBuffer();
     }
 
     static buffer_point create_buffer_point(buffer* buffer_ptr)
@@ -198,208 +250,4 @@ namespace editor
 
         return result;
     }
-
-#if 0
-
-    void buffer_point::update_pos_in_line()
-    {
-        PANIC("Not implemented yet.");
-    }
-
-    // Line navigation and editing.
-    bool buffer_point::insert_character(size_t line, uint8 character)
-    {
-        curr_chunk->insert_character(line, character);
-        return true; // TODO: For sure?
-    }
-
-    bool buffer_point::move_forward_curr_line()
-    {
-        return curr_chunk->lines[line_in_chunk].cursor_forward();
-    }
-
-    bool buffer_point::move_backward_curr_line()
-    {
-        return curr_chunk->lines[line_in_chunk].cursor_backward();
-    }
-
-    bool buffer_point::delete_char_at_cursor_backward()
-    {
-        auto removed = curr_chunk->lines[line_in_chunk].delete_char_backward();
-
-        if (!removed)
-        {
-            // Check if caret is at the end of the line...
-            if (curr_chunk->lines[line_in_chunk].get_idx() == 0)
-            {
-                // We are at the end of a buffer.
-                if (curr_chunk->curr_line == 0)
-                {
-                    // TODO: Remove a line from the previous chunk.
-                    // PANIC("Not implemented yet.");
-                }
-                else
-                {
-                    curr_chunk->move_gap_to_current_line();
-                    curr_chunk->gap_start--;
-                    curr_chunk->curr_line--;
-                    // line_in_chunk--; // TODO: This one is triky!
-
-                    removed = true;
-                }
-            }
-            else
-                PANIC("No idea why removing the letter failed.");
-        }
-
-        return removed;
-    }
-
-    bool buffer_point::delete_char_at_cursor_forward()
-    {
-        auto removed = curr_chunk->lines[line_in_chunk].delete_char_forward();
-
-        // TODO: Handle the case when above fails.
-        return removed;
-    }
-
-    bool buffer_point::jump_start_line()
-    {
-        PANIC("Not implemented yet.");
-        return false;
-    }
-    bool buffer_point::jump_end_line()
-    {
-        PANIC("Not implemented yet.");
-        return false;
-    }
-
-    // Buffer navigation.
-    bool buffer_point::move_line_up()
-    {
-        // TODO: Handle the case if it fails.
-        if (curr_chunk->line_backward())
-        {
-            line_in_chunk--;
-            return true;
-        }
-        else
-            return false;
-    }
-
-    // Buffer navigation.
-    bool buffer_point::move_line_down()
-    {
-        // TODO: Handle the case if it fails.
-        if (curr_chunk->line_forward())
-        {
-            line_in_chunk++;
-            return true;
-        }
-        else
-            return false;
-    }
-
-    bool buffer_point::insert_newline()
-    {
-        if(curr_chunk->insert_newline())
-        {
-            line_in_chunk++;
-            return true;
-        }
-        else
-            return false;
-    }
-#endif
-
-#if 0
-    void buffer::update_pos_in_line()
-    {
-        curr_index = lines[curr_line].get_idx();
-        LOG_TRACE("Position has beed updated.");
-    }
-
-    bool buffer::insert_character(uint8 character)
-    {
-        auto succeeded = false;
-        if (character != '\0')
-        {
-            lines[curr_line].insert_at_point(character);
-            succeeded = true; // Inserting character cannot fail.
-            update_pos_in_line();
-        }
-
-        return succeeded;
-    }
-
-    bool buffer::move_forward_curr_line()
-    {
-        auto succeeded = lines[curr_line].cursor_forward();
-        if (succeeded)
-            update_pos_in_line();
-
-        return succeeded;
-    }
-
-    bool buffer::move_backward_curr_line()
-    {
-        auto succeeded = lines[curr_line].cursor_backward();
-        if (succeeded)
-            update_pos_in_line();
-
-        return succeeded;
-    }
-
-    bool buffer::delete_char_at_cursor_backward()
-    {
-        auto succeeded = lines[curr_line].delete_char_backward();
-        if (succeeded)
-            update_pos_in_line();
-
-        return succeeded;
-    }
-
-    bool buffer::delete_char_at_cursor_forward()
-    {
-        auto succeeded = lines[curr_line].delete_char_forward();
-        return succeeded;
-    }
-
-    bool buffer::move_line_up()
-    {
-        auto succeeded = false;
-        if (curr_line > 0)
-            curr_line--;
-        succeeded = true;
-
-        return succeeded;
-    }
-
-    bool buffer::move_line_down()
-    {
-        auto succeeded = false;
-        curr_line++;
-        succeeded = true;
-
-        return succeeded;
-    }
-
-    bool buffer::jump_start_line()
-    {
-        auto result = lines[curr_line].jump_start_dumb();
-        if (result)
-            update_pos_in_line();
-
-        return result;
-    }
-
-    bool buffer::jump_end_line()
-    {
-        auto result = lines[curr_line].jump_end_dumb();
-        if (result)
-            update_pos_in_line();
-
-        return result;
-    }
-#endif
 }
