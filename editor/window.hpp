@@ -10,8 +10,8 @@
 namespace editor
 {
     // To lowercae!
-    enum window_split { WIN_SPLIT_VERTCAL, WIN_SPLIT_HORIZONTAL };
-    enum window_traverse_mode { WIN_TRAVERSE_FORWARD, WIN_TRAVERSE_BACKWARDS };
+    enum window_split : uint8 { WIN_SPLIT_VERTCAL, WIN_SPLIT_HORIZONTAL };
+    enum window_traverse_mode : uint8 { WIN_TRAVERSE_FORWARD, WIN_TRAVERSE_BACKWARDS };
 
     struct window
     {

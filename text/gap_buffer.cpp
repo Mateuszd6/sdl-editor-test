@@ -252,8 +252,6 @@ static void move_gap_bufffer(gap_buffer* from, gap_buffer* to)
     to->gap_start = (to->buffer + gap_start_offset);
     to->gap_end = (to->buffer + gap_end_offset);
 
-    // TODO(Cleaup): After doing buffer_chunk - try to hide it, because memory
-    // does not have to be cleared.
     from->capacity = 0;
     from->buffer = nullptr;
     from->gap_start = nullptr;

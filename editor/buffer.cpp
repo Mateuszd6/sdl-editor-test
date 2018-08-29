@@ -5,10 +5,10 @@ namespace editor::global
     static editor::buffer buffers[256];
 }
 
-namespace editor::detail
+namespace editor
 {
-    /// Line 0 is valid.
-    void buffer_chunk::initailize()
+    // Line 0 is valid.
+    void buffer::initialize()
     {
         prev_chunks_size = 0;
         gap_start = 1;
@@ -18,7 +18,7 @@ namespace editor::detail
     }
 
     /// After this move point'th line is not valid and must be initialized before use.
-    void buffer_chunk::move_gap_to_point(size_t point)
+    void buffer::move_gap_to_point(size_t point)
     {
         if (point < gap_start)
         {
@@ -47,7 +47,7 @@ namespace editor::detail
             UNREACHABLE();
     }
 
-    void buffer_chunk::move_gap_to_buffer_end()
+    void buffer::move_gap_to_buffer_end()
     {
         if (gap_end == NUMBER_OF_LINES_IN_BUFFER)
             LOG_WARN("Gap already at the end.");
@@ -65,7 +65,7 @@ namespace editor::detail
     }
 
     // TODO: Dont use it. Use: get_line()->insert....
-    bool buffer_chunk::insert_character(size_t line, size_t point, uint8 character)
+    bool buffer::insert_character(size_t line, size_t point, uint8 character)
     {
         get_line(line)->insert_at_point(point, character);
 
@@ -76,7 +76,7 @@ namespace editor::detail
     }
 
     /// line - number of line after we insert newline.
-    bool buffer_chunk::insert_newline(size_t line)
+    bool buffer::insert_newline(size_t line)
     {
         move_gap_to_point(line + 1);
         gap_start++;
@@ -86,7 +86,7 @@ namespace editor::detail
         return true;
     }
 
-    bool buffer_chunk::insert_newline_correct(size_t line, size_t point)
+    bool buffer::insert_newline_correct(size_t line, size_t point)
     {
         ASSERT(line < size());
 
@@ -104,7 +104,7 @@ namespace editor::detail
         return true;
     }
 
-    bool buffer_chunk::delete_line(size_t line)
+    bool buffer::delete_line(size_t line)
     {
         ASSERT(line > 0);
         ASSERT(line < size());
@@ -126,17 +126,17 @@ namespace editor::detail
         return true;
     }
 
-    size_t buffer_chunk::size() const
+    size_t buffer::size() const
     {
         return NUMBER_OF_LINES_IN_BUFFER - gap_size();
     }
 
-    size_t buffer_chunk::gap_size() const
+    size_t buffer::gap_size() const
     {
         return gap_end - gap_start;
     }
 
-    gap_buffer* buffer_chunk::get_line(size_t line)
+    gap_buffer* buffer::get_line(size_t line)
     {
         ASSERT(line < size());
 
@@ -146,7 +146,7 @@ namespace editor::detail
             return &lines[gap_end + (line - gap_start)];
     }
 
-    void buffer_chunk::DEBUG_print_state() const
+    void buffer::DEBUG_print_state() const
     {
         auto in_gap = false;
         printf("Gap: %ld-%ld\n", gap_start, gap_end);
@@ -186,29 +186,10 @@ namespace editor
         return result;
     }
 
-    void buffer::initialize()
-    {
-        // TODO: Realloc this array if needed.
-        chunks = static_cast<detail::buffer_chunk*>(malloc(sizeof(detail::buffer_chunk) * 16));
-        chunks_size = 1;
-        chunks_capacity = 16;
-
-        chunks[0].initailize();
-        last_up_to_date_with_size_chunk = 1;
-    }
-
-    void buffer::DEBUG_print_state() const
-    {
-        for (int i = 0; i < chunks_size; ++i)
-        {
-            chunks[i].DEBUG_print_state();
-        }
-    }
-
     static buffer_point create_buffer_point(buffer* buffer_ptr)
     {
         auto result = buffer_point {};
-        result.buffer_ptr = &buffer_ptr->chunks[0];
+        result.buffer_ptr = buffer_ptr;
         result.first_line = 0;
         result.curr_line = 0;
         result.curr_idx = 0;

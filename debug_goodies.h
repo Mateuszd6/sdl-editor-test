@@ -402,4 +402,13 @@
   #define LOG_FATAL(MSG, ...) DG_INT_LOG_AUX(MSG, FATAL, 2, DG_LOG_LVL, DG_INT_RED_COLOR_ID, ##__VA_ARGS__)
 #endif
 
+#if 1 // test code
+
+// Better than arrray count.
+template<typename T, std::size_t N>
+constexpr std::size_t lengthof(T (&)[N]) { return N; }
+
+#endif // test code
+
+
 #endif // __DEBUG_GOODIES_H__
