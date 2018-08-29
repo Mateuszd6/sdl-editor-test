@@ -575,6 +575,12 @@ static int HandleEvent(const SDL_Event &event)
                 case SDLK_COMMA:
                     character = (event.key.keysym.mod & KMOD_SHIFT) ? '<' : ',';
                     break;
+                case SDLK_SLASH:
+                    character = (event.key.keysym.mod & KMOD_SHIFT) ? '?' : '/';
+                    break;
+                case SDLK_BACKSLASH:
+                    character = (event.key.keysym.mod & KMOD_SHIFT) ? '|' : '\\';
+                    break;
 
                 case SDLK_TAB:
                     tab = true;
@@ -628,17 +634,32 @@ static int HandleEvent(const SDL_Event &event)
 
 #if 1
             if(character != '\0')
+            {
                 current_window->buf_point.buffer_ptr
                     ->get_line(current_window->buf_point.curr_line)
                     ->insert_at_point(current_window->buf_point.curr_idx++, character);
 
-            else if (backspace)
+                current_window->buf_point.last_line_idx = -1;
+            }
+
+            else if(tab)
+            {
+                for(auto i = 0; i < 4; ++i)
+                    current_window->buf_point.buffer_ptr
+                        ->get_line(current_window->buf_point.curr_line)
+                        ->insert_at_point(current_window->buf_point.curr_idx++, ' ');
+
+                current_window->buf_point.last_line_idx = -1;
+            }
+            else if(backspace)
             {
                 if(current_window->buf_point.curr_idx > 0)
                 {
                     current_window->buf_point.buffer_ptr
                         ->get_line(current_window->buf_point.curr_line)
                         ->delete_char_backward(current_window->buf_point.curr_idx--);
+
+                    current_window->buf_point.last_line_idx = -1;
                 }
                 else if(current_window->buf_point.curr_line > 0)
                 {
@@ -651,6 +672,8 @@ static int HandleEvent(const SDL_Event &event)
 
                     current_window->buf_point.curr_line--;
                     current_window->buf_point.curr_idx = line_size;
+
+                    current_window->buf_point.last_line_idx = -1;
                 }
                 else
                     LOG_WARN("Cannot delete backwards. No previous line.");
@@ -663,6 +686,8 @@ static int HandleEvent(const SDL_Event &event)
                     current_window->buf_point.buffer_ptr
                         ->get_line(current_window->buf_point.curr_line)
                         ->delete_char_forward(current_window->buf_point.curr_idx);
+
+                    current_window->buf_point.last_line_idx = -1;
                 }
                 else if(current_window->buf_point.curr_line < current_window->buf_point.buffer_ptr->size() - 1)
                 {
@@ -678,6 +703,8 @@ static int HandleEvent(const SDL_Event &event)
 
                     current_window->buf_point.curr_line--;
                     current_window->buf_point.curr_idx = line_size;
+
+                    current_window->buf_point.last_line_idx = -1;
                 }
                 else
                     LOG_WARN("Cannot delete forward. No next line.");
@@ -685,11 +712,15 @@ static int HandleEvent(const SDL_Event &event)
 
             else if (enter)
             {
-                current_window->buf_point.buffer_ptr
-                    ->insert_newline_correct(current_window->buf_point.curr_line, current_window->buf_point.curr_idx);
+                current_window
+                    ->buf_point
+                    .buffer_ptr
+                    ->insert_newline_correct(current_window->buf_point.curr_line,
+                                             current_window->buf_point.curr_idx);
 
                 current_window->buf_point.curr_line++;
                 current_window->buf_point.curr_idx = 0;
+                current_window->buf_point.last_line_idx = -1;
             }
 
             else if(arrow == 1)
@@ -700,11 +731,13 @@ static int HandleEvent(const SDL_Event &event)
                     // Pointer can be at 'line->size()' as we might append to the current line.
                     ASSERT(current_window->buf_point.curr_idx < line->size());
                     current_window->buf_point.curr_idx++;
+                    current_window->buf_point.last_line_idx = -1;
                 }
                 else if(current_window->buf_point.curr_line < current_window->buf_point.buffer_ptr->size() - 1)
                 {
                     current_window->buf_point.curr_line++;
                     current_window->buf_point.curr_idx = 0;
+                    current_window->buf_point.last_line_idx = -1;
                 }
                 else
                     LOG_WARN("Cannot move right. No next character.");
@@ -716,11 +749,13 @@ static int HandleEvent(const SDL_Event &event)
                 {
                     ASSERT(current_window->buf_point.curr_idx > 0);
                     current_window->buf_point.curr_idx--;
+                    current_window->buf_point.last_line_idx = -1;
                 }
                 else if(current_window->buf_point.curr_line > 0)
                 {
                     current_window->buf_point.curr_line--;
                     current_window->buf_point.curr_idx = current_window->buf_point.buffer_ptr->get_line(current_window->buf_point.curr_line)->size();
+                    current_window->buf_point.last_line_idx = -1;
                 }
                 else
                     LOG_WARN("Cannot move left. No previous character.");
@@ -731,7 +766,27 @@ static int HandleEvent(const SDL_Event &event)
                 if(current_window->buf_point.curr_line > 0)
                 {
                     current_window->buf_point.curr_line--;
-                    current_window->buf_point.curr_idx = 0;
+                    if (current_window->buf_point.last_line_idx >= 0)
+                    {
+                        LOG_DEBUG("Last line idx is %ld. Jumping:",
+                                  current_window->buf_point.last_line_idx);
+                        current_window->buf_point.curr_idx = current_window->buf_point.last_line_idx;
+                        current_window->buf_point.last_line_idx = -1;
+                    }
+
+                    auto curr_line_size = current_window->buf_point
+                        .buffer_ptr
+                        ->get_line(current_window->buf_point.curr_line)
+                        ->size();
+
+                    if (current_window->buf_point.curr_idx > curr_line_size)
+                    {
+                        current_window->buf_point.last_line_idx = current_window->buf_point.curr_idx;
+                        current_window->buf_point.curr_idx = curr_line_size;
+
+                        LOG_DEBUG("Truncating the cursor. (Saved: %ld)",
+                                  current_window->buf_point.last_line_idx);
+                    }
                 }
                 else
                     LOG_WARN("Cannot goto previous line. No previous line.");
@@ -742,17 +797,48 @@ static int HandleEvent(const SDL_Event &event)
                 if(current_window->buf_point.curr_line < current_window->buf_point.buffer_ptr->size() - 1)
                 {
                     current_window->buf_point.curr_line++;
-                    current_window->buf_point.curr_idx = 0;
+                    if (current_window->buf_point.last_line_idx >= 0)
+                    {
+                        LOG_DEBUG("Last line idx is %ld. Jumping:",
+                                  current_window->buf_point.last_line_idx);
+                        current_window->buf_point.curr_idx = current_window->buf_point.last_line_idx;
+                        current_window->buf_point.last_line_idx = -1;
+                    }
+
+                    auto curr_line_size = current_window->buf_point
+                        .buffer_ptr
+                        ->get_line(current_window->buf_point.curr_line)
+                        ->size();
+
+                    if (current_window->buf_point.curr_idx > curr_line_size)
+                    {
+                        current_window->buf_point.last_line_idx = current_window->buf_point.curr_idx;
+                        current_window->buf_point.curr_idx = curr_line_size;
+
+                        LOG_DEBUG("Truncating the cursor. (Saved: %ld)",
+                                  current_window->buf_point.last_line_idx);
+                    }
                 }
                 else
                     LOG_WARN("Cannot goto next line. No next line.");
             }
 
             else if(home)
+            {
                 current_window->buf_point.curr_idx = 0;
+                current_window->buf_point.last_line_idx = -1;
+            }
 
             else if(end)
-                current_window->buf_point.curr_idx = current_window->buf_point.buffer_ptr->get_line(current_window->buf_point.curr_line)->size();
+            {
+                current_window->buf_point.curr_idx =
+                    current_window
+                    ->buf_point
+                    .buffer_ptr
+                    ->get_line(current_window->buf_point.curr_line)
+                    ->size();
+                current_window->buf_point.last_line_idx = -1;
+            }
 
             else if(test_operation)
             {

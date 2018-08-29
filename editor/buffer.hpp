@@ -56,6 +56,14 @@ namespace editor
         uint64 first_line;
         uint64 curr_line;
         uint64 curr_idx;
+
+        /// If the line is switched to the much shorter one, and the current
+        /// index is truncated to the end, ths value holds the previous index
+        /// until the cursor is moved left / right, something is inserted etc.
+        /// After moving to the larger one, this index is tried to be restored.
+        /// This value is ignored when it is equal to -1.
+        int64 last_line_idx;
+
         bool starting_from_top;
     };
 

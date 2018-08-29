@@ -212,6 +212,7 @@ namespace editor
         result.first_line = 0;
         result.curr_line = 0;
         result.curr_idx = 0;
+        result.last_line_idx = -1;
         result.starting_from_top = true;
 
         return result;
