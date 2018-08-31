@@ -26,7 +26,7 @@ namespace editor
             auto diff = gap_start - point;
             auto dest_start = gap_end - diff;
             auto source_start = point;
-            for (auto i = 0_u64; i < diff; ++i)
+            for (auto i = static_cast<int64>(diff - 1); i >= 0; --i)
                 move_gap_bufffer(&lines[source_start + i], &lines[dest_start + i]);
 
             gap_start -= diff;
@@ -193,28 +193,42 @@ namespace editor
     // TODO(NEXT): Implement better file API than this horrible c++ streams.
     static buffer* create_buffer_from_file(char const* file_path)
     {
-        auto file = fopen(file_path, "r");
+        auto result = global::buffers + global::number_of_buffers;
+        global::number_of_buffers++;
+        result->initialize();
 
+        auto file = fopen(file_path, "r");
+        auto line_idx = 0_u64;
         auto line_capacity = 128_u64;
         auto line_size = 0_u64;
         auto line = static_cast<int8*>(malloc(sizeof(int8) * line_capacity));
-        line[0] = 0_u64;
+        auto need_to_append_last_line = false;
 
+        line[0] = 0_u64;
         auto c = EOF;
         do
         {
             c = fgetc(file);
-
-            if (c == EOF)
-                break;
-            else if(c == '\n')
+            if(c == '\n' || c == EOF)
             {
-                LOG_WARN("LINE: %s", line);
+                result->gap_start = line_idx + 1;
+                result->get_line(line_idx)->initialize();
+
+                for(auto i = 0_u64; i < line_size; ++i)
+                    result->get_line(line_idx)->insert_at_point(i, line[i]);
+
+                line_idx++;
+                if(line_idx > 220)
+                    break;
+
                 line_size = 0;
-                line[0] = '\0';
                 continue;
             }
-            else if (line_size + 1 >= line_capacity)
+
+            if(c == EOF)
+                break;
+
+            if (line_size + 1 >= line_capacity)
             {
                 line_capacity *= 2;
                 // TODO: Fix common realloc mistake!
@@ -223,10 +237,17 @@ namespace editor
             }
 
             line[line_size++] = c;
-            line[line_size] = '\0';
-        } while(c != EOF);
+        }
+        while(c != EOF);
 
-        LOG_WARN("LINE: %s", line);
+#if 0
+        if(need_to_append_last_line)
+        {
+            result->insert_newline(line_idx - 1);
+            for(auto i = 0_u64; i < line_size; ++i)
+                result->get_line(line_idx)->insert_at_point(i, line[i]);
+        }
+#endif
 
         // may check feof here to make a difference between eof and io failure
         // -- network timeout for instance
@@ -235,7 +256,7 @@ namespace editor
 
         LOG_DEBUG("DONE");
 
-        return CreateNewBuffer();
+        return result;
     }
 
     static buffer_point create_buffer_point(buffer* buffer_ptr)

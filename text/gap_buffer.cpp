@@ -173,7 +173,7 @@ uint8 gap_buffer::operator [](size_t idx) const
 int8* gap_buffer::to_c_str() const
 {
     // TODO: Alloc function.
-    auto result = static_cast<int8*>(std::malloc(sizeof(uint8) * capacity));
+    auto result = static_cast<int8*>(std::malloc(sizeof(uint8) * (capacity + 1)));
     auto resutl_idx = 0;
     auto in_gap = false;
     result[0] = '\0';

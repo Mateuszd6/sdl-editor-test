@@ -38,7 +38,7 @@ namespace editor
     static void initialize_first_window()
     {
         auto mini_buffer = CreateNewBuffer();
-        auto main_window_buffer = create_buffer_from_file("/home/mateusz/super_float.cpp"); // CreateNewBuffer();
+        auto main_window_buffer = create_buffer_from_file("/home/mateusz/work/almost-editor/main.cpp"); // CreateNewBuffer();
 
         global::number_of_windows = 2;
         // Window with index 0 contains minibuffer. And is drawn separetely.
