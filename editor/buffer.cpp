@@ -10,10 +10,11 @@ namespace editor
     // Line 0 is valid.
     void buffer::initialize()
     {
-        prev_chunks_size = 0;
+        // prev_chunks_size = 0;
         lines = static_cast<gap_buffer*>(malloc(sizeof(gap_buffer) * NUMBER_OF_LINES_IN_BUFFER));
         gap_start = 1;
         gap_end = NUMBER_OF_LINES_IN_BUFFER;
+        capacity = NUMBER_OF_LINES_IN_BUFFER;
 
         lines[0].initialize();
     }
@@ -50,11 +51,11 @@ namespace editor
 
     void buffer::move_gap_to_buffer_end()
     {
-        if (gap_end == NUMBER_OF_LINES_IN_BUFFER)
+        if (gap_end == capacity)
             LOG_WARN("Gap already at the end.");
         else
         {
-            auto diff = NUMBER_OF_LINES_IN_BUFFER - gap_end;
+            auto diff = capacity - gap_end;
             auto dest_start = gap_start;
             auto source_start = gap_end;
             for (auto i = 0_u64; i < diff; ++i)
@@ -79,6 +80,16 @@ namespace editor
     /// line - number of line after we insert newline.
     bool buffer::insert_newline(size_t line)
     {
+        if(gap_size() <= 2) // TODO: Make constants.
+        {
+            move_gap_to_buffer_end();
+            capacity *= 2;
+
+            // TODO: Fix realloc.
+            lines = static_cast<gap_buffer*>(realloc(lines, sizeof(gap_buffer) * capacity));
+            gap_end = capacity;
+        }
+
         move_gap_to_point(line + 1);
         gap_start++;
         lines[line + 1].initialize();
@@ -127,17 +138,11 @@ namespace editor
         return true;
     }
 
-    size_t buffer::size() const
-    {
-        return NUMBER_OF_LINES_IN_BUFFER - gap_size();
-    }
+    size_t buffer::size() const { return capacity - gap_size(); }
 
-    size_t buffer::gap_size() const
-    {
-        return gap_end - gap_start;
-    }
+    size_t buffer::gap_size() const { return gap_end - gap_start; }
 
-    gap_buffer* buffer::get_line(size_t line)
+    gap_buffer* buffer::get_line(size_t line) const
     {
         ASSERT(line < size());
 
@@ -151,7 +156,7 @@ namespace editor
     {
         auto in_gap = false;
         printf("Gap: %ld-%ld\n", gap_start, gap_end);
-        for (auto i = 0_u64; i < NUMBER_OF_LINES_IN_BUFFER; ++i)
+        for (auto i = 0_u64; i < capacity; ++i)
         {
             if (i == gap_start)
                 in_gap = true;

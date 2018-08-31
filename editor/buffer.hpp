@@ -9,16 +9,11 @@ namespace editor
     struct buffer
     {
         gap_buffer* lines;
-
-        // The size of the chunks places before in the chunk array in the chunks
-        // array in buffer object.
-        int64 prev_chunks_size;
+        size_t capacity;
         size_t gap_start;
         size_t gap_end;
 
         void initialize();
-
-        void set_current_line(int64 index);
 
         void move_gap_to_point(size_t point);
         void move_gap_to_buffer_end();
@@ -31,7 +26,7 @@ namespace editor
 
         size_t size() const;
         size_t gap_size() const;
-        gap_buffer* get_line(size_t line);
+        gap_buffer* get_line(size_t line) const;
 
         void DEBUG_print_state() const;
     };
