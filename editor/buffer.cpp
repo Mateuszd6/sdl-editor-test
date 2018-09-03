@@ -368,8 +368,16 @@ namespace editor
 
     bool buffer_point::jump_down(uint64 number_of_lines)
     {
-        PANIC("NOT IMPLEMENTED!");
-        return true;
+        auto last_line_index = buffer_ptr->size() - 1;
+        if(curr_line == last_line_index)
+            return false;
+        else
+        {
+            curr_line = (curr_line + number_of_lines > last_line_index
+                         ? last_line_index
+                         : curr_line + number_of_lines);
+            return true;
+        }
     }
 
     bool buffer_point::line_start()
