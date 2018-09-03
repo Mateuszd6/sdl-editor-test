@@ -434,9 +434,13 @@ static int HandleEvent(const SDL_Event &event)
             auto backspace = false;
             auto del = false;
             auto home = false;
+            auto buffer_start = false;
             auto end = false;
+            auto buffer_end = false;
             auto enter = false;
             auto tab = false;
+            auto page_up = false;
+            auto page_down = false;
 
             // Generic test operation.
             auto test_operation = false;
@@ -596,6 +600,14 @@ static int HandleEvent(const SDL_Event &event)
                     del = true;
                     break;
 
+                case SDLK_PAGEDOWN:
+                    page_down = true;
+                    break;
+
+                case SDLK_PAGEUP:
+                    page_up = true;
+                    break;
+
                 case SDLK_RIGHT:
                     arrow = 1;
                     break;
@@ -610,12 +622,20 @@ static int HandleEvent(const SDL_Event &event)
                     break;
 
                 case SDLK_HOME:
-                    home = true;
-                    break;
+                {
+                    if (event.key.keysym.mod & KMOD_LCTRL)
+                        buffer_start = true;
+                    else
+                        home = true;
+                } break;
 
                 case SDLK_END:
-                    end = true;
-                    break;
+                {
+                    if (event.key.keysym.mod & KMOD_LCTRL)
+                        buffer_end = true;
+                    else
+                        end = true;
+                } break;
 
                 case SDLK_ESCAPE:
                     test_operation = true;
@@ -635,209 +655,80 @@ static int HandleEvent(const SDL_Event &event)
 #if 1
             if(character != '\0')
             {
-                current_window->buf_point.buffer_ptr
-                    ->get_line(current_window->buf_point.curr_line)
-                    ->insert_at_point(current_window->buf_point.curr_idx++, character);
-
-                current_window->buf_point.last_line_idx = -1;
+                current_window->buf_point.insert_character_at_point(character);
             }
 
             else if(tab)
             {
                 for(auto i = 0; i < 4; ++i)
-                    current_window->buf_point.buffer_ptr
-                        ->get_line(current_window->buf_point.curr_line)
-                        ->insert_at_point(current_window->buf_point.curr_idx++, ' ');
-
-                current_window->buf_point.last_line_idx = -1;
+                    current_window->buf_point.insert_character_at_point(' ');
             }
+
             else if(backspace)
             {
-                if(current_window->buf_point.curr_idx > 0)
-                {
-                    current_window->buf_point.buffer_ptr
-                        ->get_line(current_window->buf_point.curr_line)
-                        ->delete_char_backward(current_window->buf_point.curr_idx--);
+                if (!current_window->buf_point.remove_character_backward())
+                    LOG_WARN("Could not remove character backwards!");
+            }
 
-                    current_window->buf_point.last_line_idx = -1;
-                }
-                else if(current_window->buf_point.curr_line > 0)
-                {
-                    auto line_size = current_window->buf_point.buffer_ptr
-                        ->get_line(current_window->buf_point.curr_line - 1)
-                        ->size();
-
-                    current_window->buf_point.buffer_ptr
-                        ->delete_line(current_window->buf_point.curr_line);
-
-                    current_window->buf_point.curr_line--;
-                    current_window->buf_point.curr_idx = line_size;
-
-                    current_window->buf_point.last_line_idx = -1;
-                }
-                else
-                    LOG_WARN("Cannot delete backwards. No previous line.");
+            else if(page_up)
+            {
+                if (!current_window->buf_point.jump_up(5))
+                    LOG_WARN("Cannot move up!");
             }
 
             else if (del)
             {
-                if(current_window->buf_point.curr_idx < current_window->buf_point.buffer_ptr->get_line(current_window->buf_point.curr_line)->size())
-                {
-                    current_window->buf_point.buffer_ptr
-                        ->get_line(current_window->buf_point.curr_line)
-                        ->delete_char_forward(current_window->buf_point.curr_idx);
-
-                    current_window->buf_point.last_line_idx = -1;
-                }
-                else if(current_window->buf_point.curr_line < current_window->buf_point.buffer_ptr->size() - 1)
-                {
-                    current_window->buf_point.curr_line++;
-
-                    // TODO(Cleaup): This is copypaste.
-                    auto line_size = current_window->buf_point.buffer_ptr
-                        ->get_line(current_window->buf_point.curr_line - 1)
-                        ->size();
-
-                    current_window->buf_point.buffer_ptr
-                        ->delete_line(current_window->buf_point.curr_line);
-
-                    current_window->buf_point.curr_line--;
-                    current_window->buf_point.curr_idx = line_size;
-
-                    current_window->buf_point.last_line_idx = -1;
-                }
-                else
-                    LOG_WARN("Cannot delete forward. No next line.");
+                if (!current_window->buf_point.remove_character_forward())
+                    LOG_WARN("Could not remove character forward!");
             }
 
             else if (enter)
             {
-                current_window
-                    ->buf_point
-                    .buffer_ptr
-                    ->insert_newline_correct(current_window->buf_point.curr_line,
-                                             current_window->buf_point.curr_idx);
-
-                current_window->buf_point.curr_line++;
-                current_window->buf_point.curr_idx = 0;
-                current_window->buf_point.last_line_idx = -1;
+                current_window->buf_point.insert_newline_at_point();
             }
 
             else if(arrow == 1)
             {
-                auto line = current_window->buf_point.buffer_ptr->get_line(current_window->buf_point.curr_line);
-                if(current_window->buf_point.curr_idx < line->size())
-                {
-                    // Pointer can be at 'line->size()' as we might append to the current line.
-                    ASSERT(current_window->buf_point.curr_idx < line->size());
-                    current_window->buf_point.curr_idx++;
-                    current_window->buf_point.last_line_idx = -1;
-                }
-                else if(current_window->buf_point.curr_line < current_window->buf_point.buffer_ptr->size() - 1)
-                {
-                    current_window->buf_point.curr_line++;
-                    current_window->buf_point.curr_idx = 0;
-                    current_window->buf_point.last_line_idx = -1;
-                }
-                else
+                if (!current_window->buf_point.character_right())
                     LOG_WARN("Cannot move right. No next character.");
             }
 
             else if(arrow == 2)
             {
-                if(current_window->buf_point.curr_idx > 0)
-                {
-                    ASSERT(current_window->buf_point.curr_idx > 0);
-                    current_window->buf_point.curr_idx--;
-                    current_window->buf_point.last_line_idx = -1;
-                }
-                else if(current_window->buf_point.curr_line > 0)
-                {
-                    current_window->buf_point.curr_line--;
-                    current_window->buf_point.curr_idx = current_window->buf_point.buffer_ptr->get_line(current_window->buf_point.curr_line)->size();
-                    current_window->buf_point.last_line_idx = -1;
-                }
-                else
+                if (!current_window->buf_point.character_left())
                     LOG_WARN("Cannot move left. No previous character.");
             }
 
             else if(arrow == 3)
             {
-                if(current_window->buf_point.curr_line > 0)
-                {
-                    current_window->buf_point.curr_line--;
-                    if (current_window->buf_point.last_line_idx >= 0)
-                    {
-                        LOG_DEBUG("Last line idx is %ld. Jumping:",
-                                  current_window->buf_point.last_line_idx);
-                        current_window->buf_point.curr_idx = current_window->buf_point.last_line_idx;
-                        current_window->buf_point.last_line_idx = -1;
-                    }
-
-                    auto curr_line_size = current_window->buf_point
-                        .buffer_ptr
-                        ->get_line(current_window->buf_point.curr_line)
-                        ->size();
-
-                    if (current_window->buf_point.curr_idx > curr_line_size)
-                    {
-                        current_window->buf_point.last_line_idx = current_window->buf_point.curr_idx;
-                        current_window->buf_point.curr_idx = curr_line_size;
-
-                        LOG_DEBUG("Truncating the cursor. (Saved: %ld)",
-                                  current_window->buf_point.last_line_idx);
-                    }
-                }
-                else
-                    LOG_WARN("Cannot goto previous line. No previous line.");
+                if (!current_window->buf_point.line_up())
+                    LOG_WARN("Cannot move up. No previous line.");
             }
 
             else if(arrow == 4)
             {
-                if(current_window->buf_point.curr_line < current_window->buf_point.buffer_ptr->size() - 1)
-                {
-                    current_window->buf_point.curr_line++;
-                    if (current_window->buf_point.last_line_idx >= 0)
-                    {
-                        LOG_DEBUG("Last line idx is %ld. Jumping:",
-                                  current_window->buf_point.last_line_idx);
-                        current_window->buf_point.curr_idx = current_window->buf_point.last_line_idx;
-                        current_window->buf_point.last_line_idx = -1;
-                    }
-
-                    auto curr_line_size = current_window->buf_point
-                        .buffer_ptr
-                        ->get_line(current_window->buf_point.curr_line)
-                        ->size();
-
-                    if (current_window->buf_point.curr_idx > curr_line_size)
-                    {
-                        current_window->buf_point.last_line_idx = current_window->buf_point.curr_idx;
-                        current_window->buf_point.curr_idx = curr_line_size;
-
-                        LOG_DEBUG("Truncating the cursor. (Saved: %ld)",
-                                  current_window->buf_point.last_line_idx);
-                    }
-                }
-                else
-                    LOG_WARN("Cannot goto next line. No next line.");
+                if (!current_window->buf_point.line_down())
+                    LOG_WARN("Cannot move down. No next line.");
             }
 
             else if(home)
             {
-                current_window->buf_point.curr_idx = 0;
-                current_window->buf_point.last_line_idx = -1;
+                current_window->buf_point.line_start();
+            }
+
+            else if(buffer_start)
+            {
+                current_window->buf_point.buffer_start();
             }
 
             else if(end)
             {
-                current_window->buf_point.curr_idx =
-                    current_window
-                    ->buf_point
-                    .buffer_ptr
-                    ->get_line(current_window->buf_point.curr_line)
-                    ->size();
-                current_window->buf_point.last_line_idx = -1;
+                current_window->buf_point.line_end();
+            }
+
+            else if(buffer_end)
+            {
+                current_window->buf_point.buffer_end();
             }
 
             else if(test_operation)

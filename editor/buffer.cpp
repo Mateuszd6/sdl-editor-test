@@ -138,9 +138,15 @@ namespace editor
         return true;
     }
 
-    size_t buffer::size() const { return capacity - gap_size(); }
+    size_t buffer::size() const
+    {
+        return capacity - gap_size();
+    }
 
-    size_t buffer::gap_size() const { return gap_end - gap_start; }
+    size_t buffer::gap_size() const
+    {
+        return gap_end - gap_start;
+    }
 
     gap_buffer* buffer::get_line(size_t line) const
     {
@@ -178,6 +184,225 @@ namespace editor
                 printf("      ...\n%3ld:  ???\n", i);
         }
     }
+
+    bool buffer_point::insert_character_at_point(uint8 character)
+    {
+        buffer_ptr->get_line(curr_line)->insert_at_point(curr_idx++, character);
+        last_line_idx = -1;
+
+        // For now we assume that the inserting character cannot fail.
+        return true;
+    }
+
+    bool buffer_point::insert_newline_at_point()
+    {
+        buffer_ptr->insert_newline_correct(curr_line, curr_idx);
+
+        curr_line++;
+        curr_idx = 0;
+        last_line_idx = -1;
+
+        // For now we assume that the inserting character cannot fail.
+        return true;
+    }
+
+    bool buffer_point::remove_character_backward()
+    {
+        if(curr_idx > 0)
+        {
+            buffer_ptr->get_line(curr_line)->delete_char_backward(curr_idx--);
+            last_line_idx = -1;
+
+            return true;
+        }
+        else if(curr_line > 0)
+        {
+            auto line_size = buffer_ptr->get_line(curr_line - 1)->size();
+
+            buffer_ptr->delete_line(curr_line);
+            curr_line--;
+            curr_idx = line_size;
+            last_line_idx = -1;
+
+            return true;
+        }
+        else
+            return false;
+    }
+
+    bool buffer_point::remove_character_forward()
+    {
+        if(curr_idx < buffer_ptr->get_line(curr_line)->size())
+        {
+            buffer_ptr->get_line(curr_line)->delete_char_forward(curr_idx);
+            last_line_idx = -1;
+
+            return true;
+        }
+        else if(curr_line < buffer_ptr->size() - 1)
+        {
+            curr_line++;
+
+            // TODO(Cleaup): This is copypaste.
+            auto line_size = buffer_ptr->get_line(curr_line - 1)->size();
+
+            buffer_ptr->delete_line(curr_line);
+            curr_line--;
+            curr_idx = line_size;
+            last_line_idx = -1;
+
+            return true;
+        }
+        else
+            return false;
+    }
+
+    bool buffer_point::character_right()
+    {
+        auto line = buffer_ptr->get_line(curr_line);
+        if(curr_idx < line->size())
+        {
+            // Pointer can be at 'line->size()' as we might append to the current line.
+            ASSERT(curr_idx < line->size());
+            curr_idx++;
+            last_line_idx = -1;
+
+            return true;
+        }
+        else if(curr_line < buffer_ptr->size() - 1)
+        {
+            curr_line++;
+            curr_idx = 0;
+            last_line_idx = -1;
+
+            return true;
+        }
+        else
+            return false;
+    }
+
+    bool buffer_point::character_left()
+    {
+        if(curr_idx > 0)
+        {
+            ASSERT(curr_idx > 0);
+            curr_idx--;
+            last_line_idx = -1;
+
+            return true;
+        }
+        else if(curr_line > 0)
+        {
+            curr_line--;
+            curr_idx = buffer_ptr->get_line(curr_line)->size();
+            last_line_idx = -1;
+
+            return true;
+        }
+        else
+            return false;
+    }
+
+    bool buffer_point::line_up()
+    {
+        if(curr_line > 0)
+        {
+            curr_line--;
+            if (last_line_idx >= 0)
+            {
+                LOG_DEBUG("Last line idx is %ld. Jumping:", last_line_idx);
+                curr_idx = last_line_idx;
+                last_line_idx = -1;
+            }
+
+            auto curr_line_size = buffer_ptr->get_line(curr_line)->size();
+            if (curr_idx > curr_line_size)
+            {
+                last_line_idx = curr_idx;
+                curr_idx = curr_line_size;
+                LOG_DEBUG("Truncating the cursor. (Saved: %ld)", last_line_idx);
+            }
+
+            return true;
+        }
+        else
+            return false;
+    }
+
+    bool buffer_point::line_down()
+    {
+        if(curr_line < buffer_ptr->size() - 1)
+        {
+            curr_line++;
+            if (last_line_idx >= 0)
+            {
+                LOG_DEBUG("Last line idx is %ld. Jumping:", last_line_idx);
+                curr_idx = last_line_idx;
+                last_line_idx = -1;
+            }
+
+            auto curr_line_size = buffer_ptr->get_line(curr_line)->size();
+            if (curr_idx > curr_line_size)
+            {
+                last_line_idx = curr_idx;
+                curr_idx = curr_line_size;
+                LOG_DEBUG("Truncating the cursor. (Saved: %ld)", last_line_idx);
+            }
+
+            return true;
+        }
+        else
+            return false;
+    }
+
+    bool buffer_point::jump_up(uint64 number_of_lines)
+    {
+        if(curr_line == 0)
+            return false;
+        else
+        {
+            curr_line = curr_line > number_of_lines ? curr_line - number_of_lines : 0;
+            return true;
+        }
+    }
+
+    bool buffer_point::jump_down(uint64 number_of_lines)
+    {
+        PANIC("NOT IMPLEMENTED!");
+        return true;
+    }
+
+    bool buffer_point::line_start()
+    {
+        curr_idx = 0;
+        last_line_idx = -1;
+
+        return true;
+    }
+
+    bool buffer_point::line_end()
+    {
+        curr_idx = buffer_ptr->get_line(curr_line)->size();
+        last_line_idx = -1;
+
+        return true;
+    }
+
+    bool buffer_point::buffer_start()
+    {
+        curr_line = 0;
+        line_start();
+
+        return true;
+    }
+
+    bool buffer_point::buffer_end()
+    {
+        curr_line = buffer_ptr->size() - 1;
+        line_end();
+
+        return true;
+    }
 }
 
 #include "cstdio"
@@ -203,11 +428,11 @@ namespace editor
         result->initialize();
 
         auto file = fopen(file_path, "r");
-        auto line_idx = 0_u64;
+        auto first_line_inserted = false;
+        auto line_idx = -1_i64;
         auto line_capacity = 128_u64;
         auto line_size = 0_u64;
         auto line = static_cast<int8*>(malloc(sizeof(int8) * line_capacity));
-        auto need_to_append_last_line = false;
 
         line[0] = 0_u64;
         auto c = EOF;
@@ -216,15 +441,19 @@ namespace editor
             c = fgetc(file);
             if(c == '\n' || c == EOF)
             {
-                result->gap_start = line_idx + 1;
-                result->get_line(line_idx)->initialize();
+                if(!first_line_inserted)
+                    first_line_inserted = true;
+                else
+                    result->insert_newline(line_idx);
 
                 for(auto i = 0_u64; i < line_size; ++i)
-                    result->get_line(line_idx)->insert_at_point(i, line[i]);
+                    result->get_line(line_idx + 1)->insert_at_point(i, line[i]);
 
                 line_idx++;
+#if 0
                 if(line_idx > 220)
                     break;
+#endif
 
                 line_size = 0;
                 continue;
@@ -244,15 +473,6 @@ namespace editor
             line[line_size++] = c;
         }
         while(c != EOF);
-
-#if 0
-        if(need_to_append_last_line)
-        {
-            result->insert_newline(line_idx - 1);
-            for(auto i = 0_u64; i < line_size; ++i)
-                result->get_line(line_idx)->insert_at_point(i, line[i]);
-        }
-#endif
 
         // may check feof here to make a difference between eof and io failure
         // -- network timeout for instance

@@ -46,6 +46,24 @@ namespace editor
         int64 last_line_idx;
 
         bool starting_from_top;
+
+
+        bool insert_character_at_point(uint8 character);
+        bool insert_newline_at_point();
+
+        bool remove_character_backward();
+        bool remove_character_forward();
+
+        bool character_right();
+        bool character_left();
+        bool line_up();
+        bool line_down();
+        bool jump_up(uint64 number_of_lines);
+        bool jump_down(uint64 number_of_lines);
+        bool line_start();
+        bool line_end();
+        bool buffer_start();
+        bool buffer_end();
     };
 
     static buffer_point create_buffer_point(buffer* buffer_ptr);
