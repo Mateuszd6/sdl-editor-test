@@ -5,11 +5,10 @@
 #include "../config.h"
 
 // NOTE: Layout in the undo buffer:
-//       ||2B            |8B       |8B      |8B       |FIXED        ||
-//       ||operation_mask|curr_line|curr_idx|data_size|raw_char_data|| ...
+//       ||FIXED        |2B            |8B       |8B      |8B       ||8B            ||
+//       ||raw_char_data|operation_mask|curr_line|curr_idx|data_size||next_data_size|| ...
+//                       ^ Here last_operation points.
 
-//       ||1b     |1b      |14b      ||
-//       ||is_last|is_first|enum_data|| ...
 
 const uint64 UNDO_BUFFER_SIZE = 4000000; // in bytes
 
@@ -20,8 +19,8 @@ enum operation_enum : uint16
     INSERT_CHARACTERS = 1,
     REMOVE_CHARACTERS = 2,
 
-    IS_LAST = 1 << 14,
-    IS_FIRST = 1 << 14,
+    IS_LAST = (1 << 15) - 1,
+    IS_FIRST = 1 << 15,
 };
 
 struct undo_buffer
@@ -30,17 +29,22 @@ struct undo_buffer
 
     /// Points to the beginning of the one element
     /// (to the operation_enum byte in the layout decribed above).
-    uint8* last_operation;
+    uint8* current_point;
+
+    /// current_point must point to operation_info with operation_mask IS_FIRST
+    /// bit on and it has already been undone.
+    bool no_more_undo;
 
     void DEBUG_print_state() const;
 };
 
 struct operation_info
 {
-    uint16 operation_mask;
+    operation_enum operation;
     uint64 curr_line;
     uint64 curr_idx;
     uint64 data_size;
+    uint64 data_size_next;
 };
 
 static void undo_buffer_initialize(undo_buffer* ub);
