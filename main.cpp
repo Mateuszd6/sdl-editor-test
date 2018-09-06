@@ -2,6 +2,8 @@
 
 // TODO(Cleanup): remove from here as many as possible.
 #include "text/gap_buffer.hpp"
+#include "text/undo_buffer.hpp"
+
 #include "editor/buffer.hpp"
 #include "editor/window.hpp"
 #include "graphics/graphics.hpp"
@@ -9,6 +11,7 @@
 
 // TODO(Cleaup): Only for unity build.
 #include "text/gap_buffer.cpp"
+#include "text/undo_buffer.cpp"
 #include "editor/buffer.cpp"
 #include "editor/window.cpp"
 #include "graphics/graphics.cpp"
@@ -789,10 +792,14 @@ static int HandleEvent(const SDL_Event &event)
                 }
             }
 
+
+            current_window->buf_point.buffer_ptr->undo.DEBUG_print_state();
+#if 0
             printf("Line: %ld\nIndex: %ld",
                    current_window->buf_point.curr_line,
                    current_window->buf_point.curr_idx);
             current_window->buf_point.buffer_ptr->DEBUG_print_state();
+#endif
 #endif
 #if 0
             if(character != '\0')

@@ -8,8 +8,6 @@
 #define FAILED(EXPR_RES) (static_cast<int>(EXPR_RES) < 0)
 #define IS_NULL(EXPR_RES) ((EXPR_RES) == nullptr)
 
-#define IS_EARLIER_IN_ARR(ARR, FIRST, SECOND) (FIRST - ARR < SECOND - ARR)
-
 // My debug goodies library and its config stuff.
 #define DEBUG
 #define LOGGING

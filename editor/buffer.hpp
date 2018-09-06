@@ -2,6 +2,7 @@
 #define __EDITOR_BUFFER_HPP_INCLUDED__
 
 #include "../text/gap_buffer.hpp"
+#include "../text/undo_buffer.hpp"
 #define NUMBER_OF_LINES_IN_BUFFER (256)
 
 namespace editor
@@ -12,6 +13,7 @@ namespace editor
         size_t capacity;
         size_t gap_start;
         size_t gap_end;
+        undo_buffer undo;
 
         void initialize();
 

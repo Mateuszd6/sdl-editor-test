@@ -86,6 +86,25 @@ struct gap_buffer
 
     /// Pretty prints the structure state to console.
     void DEBUG_print_state() const;
+
+#if 0
+
+    struct iterator
+    {
+        gap_buffer* gapb;
+        uint8* curr;
+
+        iterator operator=(const iterator&);
+        bool operator==(const iterator&);
+        bool operator!=(const iterator&);
+        void operator++(); //prefix increment
+        uint8 operator*() const;
+    };
+
+    iterator begin();
+    iterator end();
+
+#endif
 };
 
 /// The position from where the buffer has been moved is undefined.

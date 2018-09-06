@@ -15,6 +15,7 @@ namespace editor
         gap_start = 1;
         gap_end = NUMBER_OF_LINES_IN_BUFFER;
         capacity = NUMBER_OF_LINES_IN_BUFFER;
+        undo_buffer_initialize(&undo);
 
         lines[0].initialize();
     }
@@ -173,9 +174,14 @@ namespace editor
             if (!in_gap)
             {
                 printf("%3ld:[%3ld]  ", i, lines[i].size());
+#if 0
+                for(auto _ : lines[i])
+                    printf("%c", _);
+#else
                 auto line = lines[i].to_c_str();
                 printf("%s", line);
                 free(static_cast<void*>(line));
+#endif
                 printf("\n");
             }
             else if (in_gap && i - gap_start < 2)

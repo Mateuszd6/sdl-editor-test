@@ -242,6 +242,51 @@ void gap_buffer::DEBUG_print_state() const
     printf("%s", print_buffer);
 }
 
+#if 0
+
+gap_buffer::iterator gap_buffer::iterator::operator=(gap_buffer::iterator const& other)
+{
+    auto result = gap_buffer::iterator {};
+    result.gapb = other.gapb;
+    result.curr = other.curr;
+
+    return result;
+}
+
+bool gap_buffer::iterator::operator==(gap_buffer::iterator const& other)
+{
+    return curr == other.curr;
+}
+
+bool gap_buffer::iterator::operator!=(gap_buffer::iterator const& other)
+{
+    return curr != other.curr;
+}
+
+void gap_buffer::iterator::operator++()
+{
+    curr++;
+    if(curr == gapb->gap_start)
+        curr = gapb->gap_end;
+}
+
+uint8 gap_buffer::iterator::operator*() const
+{
+    return *curr;
+}
+
+gap_buffer::iterator gap_buffer::begin()
+{
+    return iterator { this, buffer == gap_start ? gap_end : buffer };
+}
+
+gap_buffer::iterator gap_buffer::end()
+{
+    return iterator { this, buffer + capacity };
+}
+
+#endif
+
 static void move_gap_bufffer(gap_buffer* from, gap_buffer* to)
 {
     auto gap_start_offset = from->gap_start - from->buffer;
