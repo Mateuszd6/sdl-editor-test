@@ -1,9 +1,9 @@
 #include "config.h"
 
 // TODO(Cleanup): remove from here as many as possible.
+#include "misc/length_bufer.hpp"
 #include "text/gap_buffer.hpp"
 #include "text/undo_buffer.hpp"
-
 #include "editor/buffer.hpp"
 #include "editor/window.hpp"
 #include "graphics/graphics.hpp"
@@ -444,6 +444,7 @@ static int HandleEvent(const SDL_Event &event)
             auto tab = false;
             auto page_up = false;
             auto page_down = false;
+            auto undo = false;
 
             // Generic test operation.
             auto test_operation = false;
@@ -526,7 +527,11 @@ static int HandleEvent(const SDL_Event &event)
                     character = (event.key.keysym.mod & KMOD_SHIFT) ? 'Y' : 'y';
                     break;
                 case SDLK_z:
-                    character = (event.key.keysym.mod & KMOD_SHIFT) ? 'Z' : 'z';
+                    // TODO: Redo if if (event.key.keysym.mod & KMOD_CONTROL & KMOD_SHIFT)
+                    if (event.key.keysym.mod & KMOD_LCTRL)
+                        undo = true;
+                    else
+                        character = (event.key.keysym.mod & KMOD_SHIFT) ? 'Z' : 'z';
                     break;
                 case SDLK_0:
                     character = (event.key.keysym.mod & KMOD_SHIFT) ? ')' : '0';
@@ -742,6 +747,43 @@ static int HandleEvent(const SDL_Event &event)
             else if(buffer_end)
             {
                 current_window->buf_point.buffer_end();
+            }
+
+            else if(undo)
+            {
+                switch(current_window->buf_point.buffer_ptr->undo.get_operation_time())
+                {
+                    // TODO: Optimize for inserting more than one chracter at once!
+                    case INSERT_CHARACTERS:
+                    {
+                        auto weak_buffer = current_window->buf_point.buffer_ptr->undo.get_data();
+                        char buffer[weak_buffer.length + 1];
+                        for(auto i = 0_u64; i < weak_buffer.length; ++i)
+                            buffer[i] = weak_buffer.data[i];
+                        buffer[weak_buffer.length] = 0_i8;
+
+                        LOG_WARN("Should remove %lu characters. They should be '%s'.", weak_buffer.length, buffer);
+                    } break;
+
+                    case REMOVE_CHARACTERS:
+                    {
+                        auto weak_buffer = current_window->buf_point.buffer_ptr->undo.get_data();
+
+                        for(auto i = 0_u64; i < weak_buffer.length; ++i)
+                            current_window->buf_point.insert_character_at_point(weak_buffer.data[i]);
+
+                        char buffer[weak_buffer.length + 1];
+                        for(auto i = 0_u64; i < weak_buffer.length; ++i)
+                            buffer[i] = weak_buffer.data[i];
+                        buffer[weak_buffer.length] = 0_i8;
+
+                        LOG_WARN("Should insert characters: '%s'.", buffer);
+                    } break;
+
+                    default:
+                        PANIC("Operation not supported!");
+                        break;
+                }
             }
 
             else if(test_operation)

@@ -4,6 +4,8 @@
 #include "../debug_goodies.h"
 #include "../config.h"
 
+#include "./misc/length_bufer.hpp"
+
 // NOTE: Layout in the undo buffer:
 //       ||FIXED        |2B            |8B       |8B      |8B       ||8B            ||
 //       ||raw_char_data|operation_mask|curr_line|curr_idx|data_size||next_data_size|| ...
@@ -34,6 +36,11 @@ struct undo_buffer
     /// current_point must point to operation_info with operation_mask IS_FIRST
     /// bit on and it has already been undone.
     bool no_more_undo;
+
+    // NOTE: This is a weak reference!
+    misc::length_buffer get_data() const;
+
+    operation_enum get_operation_time() const;
 
     void DEBUG_print_state() const;
 };

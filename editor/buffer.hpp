@@ -3,6 +3,7 @@
 
 #include "../text/gap_buffer.hpp"
 #include "../text/undo_buffer.hpp"
+
 #define NUMBER_OF_LINES_IN_BUFFER (256)
 
 namespace editor

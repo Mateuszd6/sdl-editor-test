@@ -31,6 +31,32 @@ void undo_buffer::DEBUG_print_state() const
     }
 }
 
+misc::length_buffer undo_buffer::get_data() const
+{
+    auto op_ptr = reinterpret_cast<operation_info*>(current_point);
+    auto result = misc::length_buffer { current_point - op_ptr->data_size, op_ptr->data_size };
+
+    return result;
+}
+
+operation_enum undo_buffer::get_operation_time() const
+{
+    auto op_ptr = reinterpret_cast<operation_info*>(current_point);
+    return op_ptr->operation;
+}
+
+#if 0
+bool undo_buffer::undo(misc::length_buffer)
+{
+    auto op_ptr = reinterpret_cast<operation_info*>(current_point);
+    // TODO: Check if stop!
+
+
+
+    return true;
+}
+#endif
+
 static void undo_buffer_initialize(undo_buffer* ub)
 {
     ub->buffer = static_cast<uint8*>(std::malloc(sizeof(uint8) * UNDO_BUFFER_SIZE));
