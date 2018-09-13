@@ -363,11 +363,26 @@ namespace editor
 
     bool buffer_point::jump_up(uint64 number_of_lines)
     {
+        auto goal_idx = (last_line_idx == -1
+                         ? curr_idx
+                         : (static_cast<uint64>(last_line_idx) ? curr_idx : last_line_idx));
+
         if(curr_line == 0)
             return false;
         else
         {
             curr_line = curr_line > number_of_lines ? curr_line - number_of_lines : 0;
+
+            auto line_len = buffer_ptr->get_line(curr_line)->size();
+            if(goal_idx > line_len)
+            {
+                last_line_idx = goal_idx;
+                curr_idx = line_len;
+                LOG_WARN("Done this! goal idx is: %ld\n", goal_idx);
+            }
+            else
+                last_line_idx = -1;
+
             return true;
         }
     }
@@ -375,13 +390,29 @@ namespace editor
     bool buffer_point::jump_down(uint64 number_of_lines)
     {
         auto last_line_index = buffer_ptr->size() - 1;
+        auto goal_idx = (last_line_idx == -1
+                         ? curr_idx
+                         : (static_cast<uint64>(last_line_idx) ? curr_idx : last_line_idx));
+
         if(curr_line == last_line_index)
             return false;
         else
         {
+            LOG_WARN("The shaky code has been done!");
             curr_line = (curr_line + number_of_lines > last_line_index
                          ? last_line_index
                          : curr_line + number_of_lines);
+
+            auto line_len = buffer_ptr->get_line(curr_line)->size();
+            if(goal_idx > line_len)
+            {
+                last_line_idx = goal_idx;
+                curr_idx = line_len;
+                LOG_WARN("Done this! goal idx is: %ld\n", goal_idx);
+            }
+            else
+                last_line_idx = -1;
+
             return true;
         }
     }
