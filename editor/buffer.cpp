@@ -365,7 +365,7 @@ namespace editor
     {
         auto goal_idx = (last_line_idx == -1
                          ? curr_idx
-                         : (static_cast<uint64>(last_line_idx) ? curr_idx : last_line_idx));
+                         : (curr_idx > static_cast<uint64>(last_line_idx) ? curr_idx : last_line_idx));
 
         if(curr_line == 0)
             return false;
@@ -392,7 +392,7 @@ namespace editor
         auto last_line_index = buffer_ptr->size() - 1;
         auto goal_idx = (last_line_idx == -1
                          ? curr_idx
-                         : (static_cast<uint64>(last_line_idx) ? curr_idx : last_line_idx));
+                         : (curr_idx > static_cast<uint64>(last_line_idx) ? curr_idx : last_line_idx));
 
         if(curr_line == last_line_index)
             return false;
