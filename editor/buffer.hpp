@@ -67,6 +67,8 @@ namespace editor
         bool line_end();
         bool buffer_start();
         bool buffer_end();
+
+        bool point_is_valid();
     };
 
     static buffer_point create_buffer_point(buffer* buffer_ptr);

@@ -31,32 +31,25 @@ void undo_buffer::DEBUG_print_state() const
     }
 }
 
-misc::length_buffer undo_buffer::get_data() const
+operation_details undo_buffer::undo()
 {
     auto op_ptr = reinterpret_cast<operation_info*>(current_point);
-    auto result = misc::length_buffer { current_point - op_ptr->data_size, op_ptr->data_size };
+    auto result = operation_details { };
+    result.data_weak_ref = misc::length_buffer { current_point - op_ptr->data_size, op_ptr->data_size };
+    result.operation_type = op_ptr->operation;
+    result.curr_line = op_ptr->curr_line;
+    result.curr_idx = op_ptr->curr_idx;
+
+    current_point -= (sizeof(operation_info) + op_ptr->data_size);
 
     return result;
 }
 
-operation_enum undo_buffer::get_operation_time() const
-{
-    auto op_ptr = reinterpret_cast<operation_info*>(current_point);
-    return op_ptr->operation;
-}
-
-#if 0
-bool undo_buffer::undo(misc::length_buffer)
-{
-    auto op_ptr = reinterpret_cast<operation_info*>(current_point);
-    // TODO: Check if stop!
-
-
-
-    return true;
-}
-#endif
-
+/* SCENERIO:
+   1) foobar |mateusz
+   2) |mateusz
+   3) |
+*/
 static void undo_buffer_initialize(undo_buffer* ub)
 {
     ub->buffer = static_cast<uint8*>(std::malloc(sizeof(uint8) * UNDO_BUFFER_SIZE));
@@ -67,13 +60,6 @@ static void undo_buffer_initialize(undo_buffer* ub)
     auto text1 = "foobar  ";
     auto text2 = "mateusz";
 
-/* SCENERIO:
-
-1. "foobar mateusz|"
-2. "mateusz|"             (removed 'foobar ' (with leading ' '))
-3. "|"                    (removed mateusz)
-
-*/
     auto op_ptr = reinterpret_cast<operation_info*>(ub->buffer);
     op_ptr->operation = operation_enum::IS_FIRST;
     op_ptr->curr_line = 0_u64;

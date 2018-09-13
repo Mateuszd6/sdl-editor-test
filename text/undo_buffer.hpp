@@ -25,6 +25,16 @@ enum operation_enum : uint16
     IS_FIRST = 1 << 15,
 };
 
+struct operation_details
+{
+    uint64 curr_line;
+    uint64 curr_idx;
+
+    operation_enum operation_type;
+
+    misc::length_buffer data_weak_ref;
+};
+
 struct undo_buffer
 {
     uint8* buffer;
@@ -37,10 +47,7 @@ struct undo_buffer
     /// bit on and it has already been undone.
     bool no_more_undo;
 
-    // NOTE: This is a weak reference!
-    misc::length_buffer get_data() const;
-
-    operation_enum get_operation_time() const;
+    operation_details undo();
 
     void DEBUG_print_state() const;
 };

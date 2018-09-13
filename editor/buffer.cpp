@@ -417,6 +417,11 @@ namespace editor
 
         return true;
     }
+
+    bool buffer_point::point_is_valid()
+    {
+        return (buffer_ptr->size() > curr_line && buffer_ptr->get_line(curr_line)->size() >= curr_idx);
+    }
 }
 
 #include "cstdio"

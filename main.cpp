@@ -751,31 +751,38 @@ static int HandleEvent(const SDL_Event &event)
 
             else if(undo)
             {
-                switch(current_window->buf_point.buffer_ptr->undo.get_operation_time())
+                auto undo_info = current_window->buf_point.buffer_ptr->undo.undo();
+
+                switch(undo_info.operation_type)
                 {
                     // TODO: Optimize for inserting more than one chracter at once!
                     case INSERT_CHARACTERS:
                     {
-                        auto weak_buffer = current_window->buf_point.buffer_ptr->undo.get_data();
-                        char buffer[weak_buffer.length + 1];
-                        for(auto i = 0_u64; i < weak_buffer.length; ++i)
-                            buffer[i] = weak_buffer.data[i];
-                        buffer[weak_buffer.length] = 0_i8;
+                        current_window->buf_point.curr_line = undo_info.curr_line;
+                        current_window->buf_point.curr_idx = undo_info.curr_idx;
 
-                        LOG_WARN("Should remove %lu characters. They should be '%s'.", weak_buffer.length, buffer);
+                        char buffer[undo_info.data_weak_ref.length + 1];
+                        for(auto i = 0_u64; i < undo_info.data_weak_ref.length; ++i)
+                            buffer[i] = undo_info.data_weak_ref.data[i];
+                        buffer[undo_info.data_weak_ref.length] = 0_i8;
+
+                        LOG_WARN("Should remove %lu characters. They should be '%s'.",
+                                 undo_info.data_weak_ref.length,
+                                 buffer);
                     } break;
 
                     case REMOVE_CHARACTERS:
                     {
-                        auto weak_buffer = current_window->buf_point.buffer_ptr->undo.get_data();
+                        current_window->buf_point.curr_line = undo_info.curr_line;
+                        current_window->buf_point.curr_idx = undo_info.curr_idx;
+                        ASSERT(current_window->buf_point.point_is_valid());
 
-                        for(auto i = 0_u64; i < weak_buffer.length; ++i)
-                            current_window->buf_point.insert_character_at_point(weak_buffer.data[i]);
-
-                        char buffer[weak_buffer.length + 1];
-                        for(auto i = 0_u64; i < weak_buffer.length; ++i)
-                            buffer[i] = weak_buffer.data[i];
-                        buffer[weak_buffer.length] = 0_i8;
+                        for(auto i = 0_u64; i < undo_info.data_weak_ref.length; ++i)
+                            current_window->buf_point.insert_character_at_point(undo_info.data_weak_ref.data[i]);
+                        char buffer[undo_info.data_weak_ref.length + 1];
+                        for(auto i = 0_u64; i < undo_info.data_weak_ref.length; ++i)
+                            buffer[i] = undo_info.data_weak_ref.data[i];
+                        buffer[undo_info.data_weak_ref.length] = 0_i8;
 
                         LOG_WARN("Should insert characters: '%s'.", buffer);
                     } break;
@@ -836,6 +843,7 @@ static int HandleEvent(const SDL_Event &event)
 
 
             current_window->buf_point.buffer_ptr->undo.DEBUG_print_state();
+            ASSERT(current_window->buf_point.point_is_valid());
 #if 0
             printf("Line: %ld\nIndex: %ld",
                    current_window->buf_point.curr_line,
