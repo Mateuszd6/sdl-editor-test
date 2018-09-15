@@ -372,6 +372,8 @@ namespace editor
         else
         {
             curr_line = curr_line > number_of_lines ? curr_line - number_of_lines : 0;
+            first_line = curr_line;
+            starting_from_top = true;
 
             auto line_len = buffer_ptr->get_line(curr_line)->size();
             if(goal_idx > line_len)
@@ -398,10 +400,11 @@ namespace editor
             return false;
         else
         {
-            LOG_WARN("The shaky code has been done!");
             curr_line = (curr_line + number_of_lines > last_line_index
                          ? last_line_index
                          : curr_line + number_of_lines);
+            first_line = curr_line;
+            starting_from_top = true;
 
             auto line_len = buffer_ptr->get_line(curr_line)->size();
             if(goal_idx > line_len)

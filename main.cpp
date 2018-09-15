@@ -38,15 +38,15 @@ namespace editor_window_utility::detail
             ->GetScreenPercForSplitType(window_split::WIN_SPLIT_HORIZONTAL) >= 0.2f)
 #endif
 
-        if (parent_window->splits_percentages[index_in_parent - 1] - prev_split
-            >= MIN_PERCANTAGE_WINDOW_SPLIT)
-        {
-            parent_window->splits_percentages[index_in_parent - 1] -= 0.01f;
-            parent_window->UpdateSize(parent_window->position);
-            parent_window->redraw(false); // Split window, cannot select.
-        }
-        else
-            LOG_WARN("Left window is too small!!");
+            if (parent_window->splits_percentages[index_in_parent - 1] - prev_split
+                >= MIN_PERCANTAGE_WINDOW_SPLIT)
+            {
+                parent_window->splits_percentages[index_in_parent - 1] -= 0.01f;
+                parent_window->UpdateSize(parent_window->position);
+                parent_window->redraw(false); // Split window, cannot select.
+            }
+            else
+                LOG_WARN("Left window is too small!!");
     }
 
     static void ResizeIthWindowRight(editor::window* parent_window,
@@ -445,6 +445,7 @@ static int HandleEvent(const SDL_Event &event)
             auto page_up = false;
             auto page_down = false;
             auto undo = false;
+            auto redo = false;
 
             // Generic test operation.
             auto test_operation = false;
@@ -524,15 +525,20 @@ static int HandleEvent(const SDL_Event &event)
                     character = (event.key.keysym.mod & KMOD_SHIFT) ? 'X' : 'x';
                     break;
                 case SDLK_y:
-                    character = (event.key.keysym.mod & KMOD_SHIFT) ? 'Y' : 'y';
-                    break;
+                {
+                    if (event.key.keysym.mod & KMOD_LCTRL)
+                        redo = true;
+                    else
+                        character = (event.key.keysym.mod & KMOD_SHIFT) ? 'Y' : 'y';
+                } break;
                 case SDLK_z:
-                    // TODO: Redo if if (event.key.keysym.mod & KMOD_CONTROL & KMOD_SHIFT)
+                {
                     if (event.key.keysym.mod & KMOD_LCTRL)
                         undo = true;
                     else
                         character = (event.key.keysym.mod & KMOD_SHIFT) ? 'Z' : 'z';
-                    break;
+                } break;
+
                 case SDLK_0:
                     character = (event.key.keysym.mod & KMOD_SHIFT) ? ')' : '0';
                     break;
@@ -563,6 +569,7 @@ static int HandleEvent(const SDL_Event &event)
                 case SDLK_9:
                     character = (event.key.keysym.mod & KMOD_SHIFT) ? '(' : '9';
                     break;
+
                 case SDLK_SEMICOLON:
                     character = (event.key.keysym.mod & KMOD_SHIFT) ? ':' : ';';
                     break;
@@ -751,53 +758,114 @@ static int HandleEvent(const SDL_Event &event)
 
             else if(undo)
             {
-                auto undo_info = current_window->buf_point.buffer_ptr->undo.undo();
-
-                switch(undo_info.operation_type)
+                auto const undo_info = current_window->buf_point.buffer_ptr->undo.undo();
+                if (undo_info != nullptr)
                 {
-                    // TODO: Optimize for inserting more than one chracter at once!
-                    case INSERT_CHARACTERS:
+                    switch(undo_info->operation)
                     {
-                        current_window->buf_point.curr_line = undo_info.curr_line;
-                        current_window->buf_point.curr_idx = undo_info.curr_idx;
+                        // TODO: Optimize for inserting more than one chracter at once!
+                        case INSERT_CHARACTERS:
+                        {
+                            current_window->buf_point.curr_line = undo_info->curr_line;
+                            current_window->buf_point.curr_idx = undo_info->curr_idx;
 
-                        char buffer[undo_info.data_weak_ref.length + 1];
-                        for(auto i = 0_u64; i < undo_info.data_weak_ref.length; ++i)
-                            buffer[i] = undo_info.data_weak_ref.data[i];
-                        buffer[undo_info.data_weak_ref.length] = 0_i8;
+                            char buffer[undo_info->data_size + 1];
+                            for(auto i = 0_u64; i < undo_info->data_size; ++i)
+                                buffer[i] = undo_info->data_ptr[i];
+                            buffer[undo_info->data_size + 1] = 0_i8;
 
-                        LOG_WARN("Should remove %lu characters. They should be '%s'.",
-                                 undo_info.data_weak_ref.length,
-                                 buffer);
-                    } break;
+                            LOG_WARN("Should remove %lu characters. They should be '%s'.",
+                                     undo_info->data_size,
+                                     buffer);
+                        } break;
 
-                    case REMOVE_CHARACTERS:
+                        case REMOVE_CHARACTERS:
+                        {
+                            current_window->buf_point.curr_line = undo_info->curr_line;
+                            current_window->buf_point.curr_idx = undo_info->curr_idx;
+                            ASSERT(current_window->buf_point.point_is_valid());
+
+                            for(auto i = 0_u64; i < undo_info->data_size; ++i)
+                                current_window->buf_point.insert_character_at_point(undo_info->data_ptr[i]);
+                            char buffer[undo_info->data_size + 1];
+                            for(auto i = 0_u64; i < undo_info->data_size; ++i)
+                                buffer[i] = undo_info->data_ptr[i];
+                            buffer[undo_info->data_size] = 0_i8;
+
+                            LOG_WARN("Should insert characters: '%s'.", buffer);
+
+                            for(auto i = 0_u64; i < undo_info->data_size; ++i)
+                                printf("_%c_", undo_info->data_ptr[i]);
+                            printf("\n");
+                        } break;
+
+                        default:
+                            PANIC("Operation not supported!");
+                            break;
+                    }
+
+                }
+            }
+
+            else if(redo)
+            {
+                auto const redo_info = current_window->buf_point.buffer_ptr->undo.redo();
+                if (redo_info != nullptr)
+                {
+                    switch(redo_info->operation)
                     {
-                        current_window->buf_point.curr_line = undo_info.curr_line;
-                        current_window->buf_point.curr_idx = undo_info.curr_idx;
-                        ASSERT(current_window->buf_point.point_is_valid());
+                        // TODO: Optimize for inserting more than one chracter at once!
+                        case INSERT_CHARACTERS:
+                        {
+                            current_window->buf_point.curr_line = redo_info->curr_line;
+                            current_window->buf_point.curr_idx = redo_info->curr_idx;
+                            ASSERT(current_window->buf_point.point_is_valid());
 
-                        for(auto i = 0_u64; i < undo_info.data_weak_ref.length; ++i)
-                            current_window->buf_point.insert_character_at_point(undo_info.data_weak_ref.data[i]);
-                        char buffer[undo_info.data_weak_ref.length + 1];
-                        for(auto i = 0_u64; i < undo_info.data_weak_ref.length; ++i)
-                            buffer[i] = undo_info.data_weak_ref.data[i];
-                        buffer[undo_info.data_weak_ref.length] = 0_i8;
+                            for(auto i = 0_u64; i < redo_info->data_size; ++i)
+                                current_window->buf_point.insert_character_at_point(redo_info->data_ptr[i]);
 
-                        LOG_WARN("Should insert characters: '%s'.", buffer);
-                    } break;
+                            char buffer[redo_info->data_size + 1];
+                            for(auto i = 0_u64; i < redo_info->data_size; ++i)
+                                buffer[i] = redo_info->data_ptr[i];
+                            buffer[redo_info->data_size] = 0_i8;
 
-                    default:
-                        PANIC("Operation not supported!");
-                        break;
+                            LOG_WARN("Should insert %lu characters. They should be '%s'.",
+                                     redo_info->data_size,
+                                     buffer);
+                        } break;
+
+                        case REMOVE_CHARACTERS:
+                        {
+                            current_window->buf_point.curr_line = redo_info->curr_line;
+                            current_window->buf_point.curr_idx = redo_info->curr_idx;
+                            ASSERT(current_window->buf_point.point_is_valid());
+
+                            char buffer[redo_info->data_size + 1];
+                            for(auto i = 0_u64; i < redo_info->data_size; ++i)
+                                buffer[i] = redo_info->data_ptr[i];
+                            buffer[redo_info->data_size] = 0_i8;
+
+                            LOG_WARN("%lu characters. Should remove characters: %s.",
+                                     redo_info->data_size,
+                                     buffer);
+
+                            for(auto i = 0_u64; i < redo_info->data_size; ++i)
+                                printf("_%c_", redo_info->data_ptr[i]);
+                            printf("\n");
+                        } break;
+
+                        default:
+                            PANIC("Operation not supported!");
+                            break;
+                    }
                 }
             }
 
             else if(test_operation)
             {
                 current_window->buf_point.buffer_ptr
-                        ->get_line(current_window->buf_point.curr_line)
-                        ->insert_at_point(current_window->buf_point.curr_idx++, '0');
+                    ->get_line(current_window->buf_point.curr_line)
+                    ->insert_at_point(current_window->buf_point.curr_idx++, '0');
 
                 // Insert newline
                 {

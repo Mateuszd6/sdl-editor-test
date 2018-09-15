@@ -2,47 +2,72 @@
 
 void undo_buffer::DEBUG_print_state() const
 {
-    // printf("UNDO BUFFER:\n");
-    auto idx = 1;
-    auto curr = current_point;
-    while(1)
-    {
-        auto op_ptr = reinterpret_cast<operation_info*>(curr);
-        printf("%d: operation: %d at %lu:%lu, of characters%s: \"",
-               idx++,
-               op_ptr->operation,
-               op_ptr->curr_line,
-               op_ptr->curr_idx,
-               (op_ptr->operation == operation_enum::IS_LAST
-                ? "(LAST)"
-                : (op_ptr->operation == operation_enum::IS_FIRST ? "(FIRST)" : "")));
-
-        auto data_size = op_ptr->data_size;
-        for(auto i = 0_u64; i < data_size; ++i)
-            printf("%c", *(curr - data_size + i));
-        printf("\"\n");
-
-        if (op_ptr->operation == operation_enum::IS_FIRST)
-            break;
-
-        curr -= (sizeof(operation_info) + data_size);
-        if (curr < buffer)
-            PANIC("Undo buffer is corrupted!");
-    }
 }
 
-operation_details undo_buffer::undo()
+operation_info const* undo_buffer::undo()
 {
-    auto op_ptr = reinterpret_cast<operation_info*>(current_point);
-    auto result = operation_details { };
-    result.data_weak_ref = misc::length_buffer { current_point - op_ptr->data_size, op_ptr->data_size };
-    result.operation_type = op_ptr->operation;
-    result.curr_line = op_ptr->curr_line;
-    result.curr_idx = op_ptr->curr_idx;
+    if(no_more_undo)
+        return nullptr;
 
-    current_point -= (sizeof(operation_info) + op_ptr->data_size);
+    if(operation_index == 0)
+        no_more_undo = true;
 
-    return result;
+    no_more_redo = false;
+    return &operations[operation_index--];
+}
+
+operation_info const* undo_buffer::redo()
+{
+    if(no_more_redo)
+        return nullptr;
+
+    if(operation_index == operation_size - 1)
+        no_more_redo = true;
+
+    no_more_undo = false;
+    operation_index++;
+    return &operations[operation_index];
+}
+
+void undo_buffer::add_undo_info(uint64 curr_line,
+                                uint64 curr_idx,
+                                uint64 data_size,
+                                operation_enum operation,
+                                misc::length_buffer text_buffer_weak_ptr)
+{
+    if(!no_more_undo) // If the operation is not the first one.
+    {
+        operation_index++;
+        operation_size++;
+    }
+    else
+    {
+        operation_index = 0;
+        operation_size = 0;
+    }
+
+    if(buffer_size + text_buffer_weak_ptr.length >= buffer_capacity)
+        PANIC("Should get rid of the old undo data, which is not implemetned");
+
+    memcpy(buffer + buffer_size, text_buffer_weak_ptr.data, text_buffer_weak_ptr.length);
+    auto data_ptr = buffer + buffer_size;
+    buffer_size += text_buffer_weak_ptr.length;
+
+    if (operation_index + 1 == operation_capacity)
+    {
+        operation_capacity *= 2;
+        operations = static_cast<operation_info*>(realloc(operations,
+                                                          sizeof(operation_info) * operation_capacity));
+    }
+
+    operations[operation_index].curr_line = curr_line;
+    operations[operation_index].curr_idx = curr_idx;
+    operations[operation_index].data_size = data_size;
+    operations[operation_index].operation = operation;
+    operations[operation_index].data_ptr = data_ptr;
+
+    no_more_redo = true;
+    no_more_undo = false;
 }
 
 /* SCENERIO:
@@ -52,39 +77,24 @@ operation_details undo_buffer::undo()
 */
 static void undo_buffer_initialize(undo_buffer* ub)
 {
-    ub->buffer = static_cast<uint8*>(std::malloc(sizeof(uint8) * UNDO_BUFFER_SIZE));
+    ub->buffer = static_cast<uint8*>(malloc(sizeof(uint8) * UNDO_BUFFER_SIZE));
+    ub->buffer_size = 0;
+    ub->buffer_capacity = UNDO_BUFFER_MAX_SIZE; // TODO!
+    ub->operation_index = 0;
+    ub->operation_index = 0;
+    ub->operation_capacity = 32;
+    ub->operations = static_cast<operation_info*>(malloc(sizeof(operation_info) * ub->operation_capacity));
+    ub->no_more_undo = true;
+    ub->no_more_redo = true;
 
-    // Insert none operation at the beginning:
-    // TODO: This assumes that the UNDO_BUFFER_SIZE is greater than the
-    // operation_info struct.
-    auto text1 = "foobar  ";
-    auto text2 = "mateusz";
+    /////
 
-    auto op_ptr = reinterpret_cast<operation_info*>(ub->buffer);
-    op_ptr->operation = operation_enum::IS_FIRST;
-    op_ptr->curr_line = 0_u64;
-    op_ptr->curr_idx = 0_u64;
-    op_ptr->data_size = 0;
-    op_ptr->data_size_next = strlen(text1);
+#if 1
+    auto text1 = "mateusz ";
+    auto text2 = "foobar ";
 
-    std::memcpy(ub->buffer + sizeof(operation_info), reinterpret_cast<const uint8*>(text1), strlen(text1));
-    op_ptr = reinterpret_cast<operation_info*>(ub->buffer + sizeof(operation_info) + strlen(text1));
-    op_ptr->operation = operation_enum::REMOVE_CHARACTERS;
-    op_ptr->curr_line = 0_u64;
-    op_ptr->curr_idx = 0_u64;
-    op_ptr->data_size = strlen(text1);
-    op_ptr->data_size_next = strlen(text2);
+    ub->add_undo_info(0, 0, 7, REMOVE_CHARACTERS, misc::length_buffer(text2, 7));
+    ub->add_undo_info(0, 0, 8, REMOVE_CHARACTERS, misc::length_buffer(text1, 8));
+#endif
 
-    std::memcpy(ub->buffer + sizeof(operation_info) + strlen(text1) + sizeof(operation_info),
-                reinterpret_cast<const uint8*>(text2),
-                strlen(text2));
-    op_ptr = reinterpret_cast<operation_info*>(
-        ub->buffer + sizeof(operation_info) + strlen(text1) + sizeof(operation_info) + strlen(text2));
-    op_ptr->operation = operation_enum::REMOVE_CHARACTERS;
-    op_ptr->curr_line = 0_u64;
-    op_ptr->curr_idx = 0_u64;
-    op_ptr->data_size = strlen(text2);
-    op_ptr->data_size_next = 0;
-
-    ub->current_point = ub->buffer + sizeof(operation_info) + strlen(text1) + sizeof(operation_info) + strlen(text2);
 }

@@ -11,55 +11,54 @@
 //       ||raw_char_data|operation_mask|curr_line|curr_idx|data_size||next_data_size|| ...
 //                       ^ Here last_operation points.
 
+const uint64 UNDO_BUFFER_MAX_SIZE = 4000000; // in bytes
+const uint64 UNDO_BUFFER_SIZE = 64 * 1000;
 
-const uint64 UNDO_BUFFER_SIZE = 4000000; // in bytes
-
-enum operation_enum : uint16
+enum operation_enum
 {
     NONE = 0,
 
     INSERT_CHARACTERS = 1,
     REMOVE_CHARACTERS = 2,
-
-    IS_LAST = (1 << 15) - 1,
-    IS_FIRST = 1 << 15,
 };
 
-struct operation_details
+struct operation_info
 {
     uint64 curr_line;
     uint64 curr_idx;
-
-    operation_enum operation_type;
-
-    misc::length_buffer data_weak_ref;
+    uint64 data_size;
+    uint8* data_ptr;
+    operation_enum operation;
 };
 
 struct undo_buffer
 {
     uint8* buffer;
+    uint32 buffer_size;
+    uint32 buffer_capacity;
 
-    /// Points to the beginning of the one element
-    /// (to the operation_enum byte in the layout decribed above).
-    uint8* current_point;
+    operation_info* operations;
 
-    /// current_point must point to operation_info with operation_mask IS_FIRST
-    /// bit on and it has already been undone.
+    uint32 operation_capacity;
+    uint32 operation_size;
+    uint32 operation_index;
+
     bool no_more_undo;
+    bool no_more_redo;
 
-    operation_details undo();
+
+    operation_info const* undo();
+    operation_info const* redo();
+
+    void add_undo_info(uint64 curr_line,
+                       uint64 curr_idx,
+                       uint64 data_size,
+                       operation_enum operation,
+                       misc::length_buffer text_buffer_weak_ptr);
 
     void DEBUG_print_state() const;
 };
 
-struct operation_info
-{
-    operation_enum operation;
-    uint64 curr_line;
-    uint64 curr_idx;
-    uint64 data_size;
-    uint64 data_size_next;
-};
 
 static void undo_buffer_initialize(undo_buffer* ub);
 
