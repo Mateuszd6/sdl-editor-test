@@ -840,6 +840,23 @@ static int HandleEvent(const SDL_Event &event)
                             current_window->buf_point.curr_idx = redo_info->curr_idx;
                             ASSERT(current_window->buf_point.point_is_valid());
 
+                            for(auto i = 0_u64; i < redo_info->data_size; ++i)
+                            {
+                                // Assert that there is a next character in the line.
+                                {
+                                    current_window->buf_point.curr_idx++;
+                                    ASSERT(current_window->buf_point.point_is_valid());
+                                    current_window->buf_point.curr_idx--;
+
+                                    auto gapb = current_window->buf_point.buffer_ptr->get_line(
+                                        current_window->buf_point.curr_line);
+                                    auto current_character = (* gapb)[current_window->buf_point.curr_idx];
+                                    ASSERT(current_character == redo_info->data_ptr[i]);
+                                }
+
+                                current_window->buf_point.remove_character_forward();
+                            }
+
                             char buffer[redo_info->data_size + 1];
                             for(auto i = 0_u64; i < redo_info->data_size; ++i)
                                 buffer[i] = redo_info->data_ptr[i];
