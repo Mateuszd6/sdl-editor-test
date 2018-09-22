@@ -13,22 +13,59 @@
 /// Max size of the gap before shrinking.
 #define GAP_BUF_MAX_SIZE_BEFORE_MEM_SHRINK (128)
 
+
+// NOTE: There is a 8-bit padding to the gap_buffer so that more strigs get
+//       SSO'ed.
+
+#define GAP_BUF_SSO
+#define GAP_BUF_SSO_CAP (30 + 8)
+#define GAP_BUF_SSO_ENABLED_BYTE (31 + 8)
+#define GAP_BUF_SSO_GAP_START (data[30 + 8])
+#define GAP_BUF_SSO_GAP_END (data[31 + 8])
+
 struct gap_buffer
 {
-    /// Allocated capacity of the buffer.
-    size_t capacity;
+#ifdef GAP_BUF_SSO
+    union
+    {
+        uint8 data[32 + 8];
+        struct
+        {
+#endif
+            uint8 padding[8];
 
-    /// The content of the text buffer.
-    uint8* buffer;
+            /// Allocated capacity of the buffer.
+            size_t capacity;
 
-    /// Pointer to the first character that is not in the gap. Character pointer
-    /// by this pointer is not in the structure and is not defined.
-    uint8* gap_start;
+            /// Pointer to the first character that is not in the gap. Character
+            /// pointer by this pointer is not in the structure and is not
+            /// defined.
+            uint8* gap_start;
 
-    /// Pointer to the first vaild character that is outside of the gap. If the
-    /// gap is at the end of a buffer, this poitner poitns outside to the
-    /// allocated structure, and should not be referenced.
-    uint8* gap_end;
+            /// Pointer to the first vaild character that is outside of the
+            /// gap. If the gap is at the end of a buffer, this poitner poitns
+            /// outside to the allocated structure, and should not be
+            /// dereferenced.
+            uint8* gap_end;
+
+            /// The content of the text buffer.
+            uint8* buffer;
+#ifdef GAP_BUF_SSO
+        };
+    };
+#endif
+
+#ifdef GAP_BUF_SSO
+
+    bool sso_enabled() const;
+
+    void sso_move_from_sso_to_full();
+
+    size_t sso_gap_size() const;
+
+    size_t sso_size() const;
+
+#endif
 
     /// Must be called before any action with this data structure is done.
     void initialize();
@@ -78,7 +115,7 @@ struct gap_buffer
 
     /// Operator alias for the 'get' function. Returns the idx'th character in
     /// the buffer.
-    uint8 operator [](size_t idx) const;
+    uint8 operator[](size_t idx) const;
 
     /// Returns the c_str representation of the line. Allocates the memory for
     /// the string. The caller is repsonsible for freeing this memory.

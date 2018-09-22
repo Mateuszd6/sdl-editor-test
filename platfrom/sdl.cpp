@@ -16,7 +16,8 @@ namespace platform::global
 
     static const int number_of_surfaces = 5;
     static TTF_Font* font;
-    static SDL_Surface* alphabet['z' - 'a' + 1];
+    static SDL_Surface* alphabet[256];
+    static SDL_Surface* alphabet_colored[256];
     static SDL_Surface* text_surface[number_of_surfaces];
 }
 
@@ -82,12 +83,38 @@ namespace platform
                 PANIC("SDL_TTF internal error. Game Over ;(");
             }
         }
+
+        for (auto c = 1; c < 128; ++c)
+        {
+            char letter[2];
+            letter[0] = c;
+            letter[1] = '\0';
+            if (IS_NULL(::platform::global::alphabet_colored[c] =
+                        TTF_RenderText_Blended(global::font,
+                                               letter,
+                                               SDL_Color {0xFF, 0x00, 0x00, 0xFF})))
+            {
+                PANIC("SDL_TTF internal error. Game Over ;(");
+            }
+        }
     }
 
     static void blit_letter(int character, ::graphics::rectangle const& rect)
     {
         auto sdl_rect = SDL_Rect { rect.x, rect.y, rect.width, rect.height };
         if (FAILED(SDL_BlitSurface(global::alphabet[character],
+                                   nullptr,
+                                   global::screen,
+                                   &sdl_rect)))
+        {
+            PANIC("Bitting surface failed!");
+        }
+    }
+
+    static void blit_letter_colored(int character, ::graphics::rectangle const& rect)
+    {
+        auto sdl_rect = SDL_Rect { rect.x, rect.y, rect.width, rect.height };
+        if (FAILED(SDL_BlitSurface(global::alphabet_colored[character],
                                    nullptr,
                                    global::screen,
                                    &sdl_rect)))
@@ -118,6 +145,11 @@ namespace platform
         auto text = line->to_c_str();
         graphics::print_text_line(window_ptr,
                                   reinterpret_cast<char const*>(text),
+#ifdef GAP_BUF_SSO
+                                  line->sso_enabled(),
+#else
+                                  false,
+#endif
                                   line_nr,
                                   current_idx,
                                   first_line_additional_offset,

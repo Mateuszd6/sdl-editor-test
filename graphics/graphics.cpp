@@ -20,6 +20,7 @@ namespace graphics
 
     static void print_text_line(editor::window const* window_ptr,
                                 char const* text,
+                                bool color,
                                 int line_nr, // First visible line of the buffer is 0.
                                 int cursor_idx, // gap_buffer const* line
                                 int first_line_offset,
@@ -47,8 +48,10 @@ namespace graphics
                 break;
             }
 #endif
-
-            ::platform::blit_letter(text_idx, draw_rect);
+            if(color)
+                ::platform::blit_letter_colored(text_idx, draw_rect);
+            else
+                ::platform::blit_letter(text_idx, draw_rect);
         }
 
         // TODO: Make sure that the cursor fits in the window.

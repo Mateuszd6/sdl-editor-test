@@ -7,6 +7,7 @@ namespace platform
                                          graphics::color const& col);
 
     static void blit_letter(int character, graphics::rectangle const& rect);
+    static void blit_letter_colored(int character, graphics::rectangle const& rect);
 
     static int get_letter_height();
     static int get_letter_width();

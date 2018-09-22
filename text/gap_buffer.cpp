@@ -5,6 +5,10 @@
 
 void gap_buffer::initialize()
 {
+#ifdef GAP_BUF_SSO
+    GAP_BUF_SSO_GAP_START = 0;
+    GAP_BUF_SSO_GAP_END = GAP_BUF_SSO_CAP;
+#else
     capacity = GAP_BUF_DEFAULT_CAPACITY;
     buffer = static_cast<uint8*>(std::malloc(sizeof(uint8) * capacity));
 
@@ -13,30 +17,61 @@ void gap_buffer::initialize()
 
     gap_start = buffer;
     gap_end = buffer + capacity;
+#endif
 }
 
 void gap_buffer::move_gap_to_point(size_t point)
 {
-    ASSERT(point <= size());
-    if (buffer + point == gap_start)
+#ifdef GAP_BUF_SSO
+    if(sso_enabled())
     {
-    }
-    else if (buffer + point < gap_start)
-    {
-        auto diff = gap_start - (buffer + point);
-        memcpy(gap_end - diff, buffer + point, sizeof(uint8) * diff);
-        gap_start -= diff;
-        gap_end -= diff;
-    }
-    else if (buffer + point > gap_start)
-    {
-        auto diff = point - (gap_start - buffer);
-        memcpy(gap_start, gap_end, sizeof(uint8) * diff);
-        gap_start += diff;
-        gap_end += diff;
+        ASSERT(point <= sso_size());
+        if (point == GAP_BUF_SSO_GAP_START)
+        {
+        }
+        else if (point < GAP_BUF_SSO_GAP_START)
+        {
+            auto diff = GAP_BUF_SSO_GAP_START - point;
+            memcpy(data + GAP_BUF_SSO_GAP_END - diff, data + point, sizeof(uint8) * diff);
+            GAP_BUF_SSO_GAP_START -= diff;
+            GAP_BUF_SSO_GAP_END -= diff;
+        }
+        else if (point > GAP_BUF_SSO_GAP_START)
+        {
+            auto diff = point - GAP_BUF_SSO_GAP_START;
+            memcpy(data + GAP_BUF_SSO_GAP_START, data + GAP_BUF_SSO_GAP_END, sizeof(uint8) * diff);
+            GAP_BUF_SSO_GAP_START += diff;
+            GAP_BUF_SSO_GAP_END += diff;
+        }
+        else
+            UNREACHABLE();
     }
     else
-        UNREACHABLE();
+    {
+#endif
+        ASSERT(point <= size());
+        if (buffer + point == gap_start)
+        {
+        }
+        else if (buffer + point < gap_start)
+        {
+            auto diff = gap_start - (buffer + point);
+            memcpy(gap_end - diff, buffer + point, sizeof(uint8) * diff);
+            gap_start -= diff;
+            gap_end -= diff;
+        }
+        else if (buffer + point > gap_start)
+        {
+            auto diff = point - (gap_start - buffer);
+            memcpy(gap_start, gap_end, sizeof(uint8) * diff);
+            gap_start += diff;
+            gap_end += diff;
+        }
+        else
+            UNREACHABLE();
+#ifdef GAP_BUF_SSO
+    }
+#endif
 }
 
 void gap_buffer::move_gap_to_buffer_end()
@@ -82,20 +117,41 @@ void gap_buffer::reserve_gap(size_t n)
 // TODO(Testing): Battle-test this. Watch out for allocations!
 void gap_buffer::insert_at_point(size_t point, uint8 character) // LATIN2 characters only.
 {
-    ASSERT(point <= size());
-    move_gap_to_point(point);
-
-    *gap_start = character;
-    gap_start++;
-
-    // Expand memory if needed:
-    if (gap_size() <= GAP_BUF_MIN_SIZE_BEFORE_MEM_EXPAND)
+#ifdef GAP_BUF_SSO
+    if(sso_enabled())
     {
-        reserve_gap(GAP_BUF_SIZE_AFTER_REALLOC);
-        LOG_WARN("Gap size after reallocing: %ld\n", gap_size());
-    }
+        ASSERT(point <= sso_size());
+        move_gap_to_point(point);
 
-    ASSERT(gap_size() > GAP_BUF_MIN_SIZE_BEFORE_MEM_EXPAND);
+        data[GAP_BUF_SSO_GAP_START] = character;
+        GAP_BUF_SSO_GAP_START++;
+
+        // Expand memory if needed:
+        if (sso_gap_size() <= 4)
+        {
+            sso_move_from_sso_to_full();
+            LOG_WARN("Full gap buffer allocated.");
+        }
+    }
+    else
+    {
+#endif
+        ASSERT(point <= size());
+        move_gap_to_point(point);
+
+        *gap_start++ = character;
+
+        // Expand memory if needed:
+        if (gap_size() <= GAP_BUF_MIN_SIZE_BEFORE_MEM_EXPAND)
+        {
+            reserve_gap(GAP_BUF_SIZE_AFTER_REALLOC);
+            LOG_WARN("Gap size after reallocing: %ld\n", gap_size());
+        }
+
+        ASSERT(gap_size() > GAP_BUF_MIN_SIZE_BEFORE_MEM_EXPAND);
+#ifdef GAP_BUF_SSO
+    }
+#endif
 }
 
 void gap_buffer::replace_at_point(size_t point, uint8 character)
@@ -159,10 +215,24 @@ size_t gap_buffer::gap_size() const
 
 uint8 gap_buffer::get(size_t idx) const
 {
-    if (static_cast<ssize_t>(idx) < (gap_start - buffer))
-        return *(buffer + idx);
+#ifdef GAP_BUF_SSO
+    if(sso_enabled())
+    {
+        if (static_cast<ssize_t>(idx) < (gap_start - buffer))
+            return data[idx];
+        else
+            return data[GAP_BUF_SSO_GAP_END + (idx - GAP_BUF_SSO_GAP_START)];
+    }
     else
-        return *(gap_end + (idx - (gap_start - buffer)));
+    {
+#endif
+        if (static_cast<ssize_t>(idx) < (gap_start - buffer))
+            return *(buffer + idx);
+        else
+            return *(gap_end + (idx - (gap_start - buffer)));
+#ifdef GAP_BUF_SSO
+    }
+#endif
 }
 
 uint8 gap_buffer::operator [](size_t idx) const
@@ -172,28 +242,46 @@ uint8 gap_buffer::operator [](size_t idx) const
 
 int8* gap_buffer::to_c_str() const
 {
-    // TODO: Alloc function.
-    auto result = static_cast<int8*>(std::malloc(sizeof(uint8) * (capacity + 1)));
-    auto resutl_idx = 0;
-    auto in_gap = false;
-    result[0] = '\0';
-
-    for (auto i = 0_u64; i < capacity; ++i)
+#ifdef GAP_BUF_SSO
+    if(sso_enabled())
     {
-        if (buffer + i == gap_start)
-            in_gap = true;
+        auto result = static_cast<int8*>(malloc(sizeof(uint8) * GAP_BUF_SSO_CAP));
+        memcpy(result, data, GAP_BUF_SSO_GAP_START);
+        memcpy(result + GAP_BUF_SSO_GAP_START,
+               data + GAP_BUF_SSO_GAP_END,
+               GAP_BUF_SSO_CAP - GAP_BUF_SSO_GAP_END);
 
-        if (buffer + i == gap_end)
-            in_gap = false;
-
-        if (!in_gap)
-        {
-            result[resutl_idx++] = *(buffer + i);
-            result[resutl_idx] = '\0';
-        }
+        result[GAP_BUF_SSO_GAP_START + (GAP_BUF_SSO_CAP - GAP_BUF_SSO_GAP_END)] = 0;
+        return result;
     }
+    else
+    {
+#endif
+        // TODO: Alloc function.
+        auto result = static_cast<int8*>(std::malloc(sizeof(uint8) * (capacity + 1)));
+        auto resutl_idx = 0;
+        auto in_gap = false;
+        result[0] = '\0';
 
-    return result;
+        for (auto i = 0_u64; i < capacity; ++i)
+        {
+            if (buffer + i == gap_start)
+                in_gap = true;
+
+            if (buffer + i == gap_end)
+                in_gap = false;
+
+            if (!in_gap)
+            {
+                result[resutl_idx++] = *(buffer + i);
+                result[resutl_idx] = '\0';
+            }
+        }
+
+        return result;
+#ifdef GAP_BUF_SSO
+    }
+#endif
 }
 
 void gap_buffer::DEBUG_print_state() const
@@ -241,6 +329,48 @@ void gap_buffer::DEBUG_print_state() const
     print_buffer[print_buffer_idx++] = '\0';
     printf("%s", print_buffer);
 }
+
+#ifdef GAP_BUF_SSO
+
+bool gap_buffer::sso_enabled() const
+{
+    return data[GAP_BUF_SSO_ENABLED_BYTE] != 0;
+}
+
+/// When SOO is not enougth.
+// TODO: This can be further optimized, because we are losing the gap on copy,
+// which can be done correctly with not-so-hard math.
+void gap_buffer::sso_move_from_sso_to_full()
+{
+    uint8 data_copied[GAP_BUF_SSO_CAP];
+    memcpy(data_copied, data, GAP_BUF_SSO_GAP_START);
+    memcpy(data_copied + GAP_BUF_SSO_GAP_START, data + GAP_BUF_SSO_GAP_END, GAP_BUF_SSO_CAP - GAP_BUF_SSO_GAP_END);
+    uint8 len = GAP_BUF_SSO_GAP_START + (GAP_BUF_SSO_CAP - GAP_BUF_SSO_GAP_END);
+
+    // LOG_WARN("Copied string is %s (len = %d)", data_copied, len);
+
+    capacity = GAP_BUF_DEFAULT_CAPACITY;
+    buffer = static_cast<uint8*>(std::malloc(sizeof(uint8) * capacity));
+
+    if (!buffer)
+        PANIC("Allocating memory failed.");
+
+    memcpy(buffer, data_copied, len);
+    gap_start = buffer + len;
+    gap_end = buffer + capacity;
+}
+
+size_t gap_buffer::sso_gap_size() const
+{
+    return GAP_BUF_SSO_GAP_END - GAP_BUF_SSO_GAP_START;
+}
+
+size_t gap_buffer::sso_size() const
+{
+    return GAP_BUF_SSO_CAP - sso_gap_size();
+}
+
+#endif
 
 #if 0
 
