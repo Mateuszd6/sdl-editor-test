@@ -671,6 +671,12 @@ static int HandleEvent(const SDL_Event &event)
             if(character != '\0')
             {
                 current_window->buf_point.insert_character_at_point(character);
+                auto lbuffer = misc::length_buffer { &character, 1 };
+                current_window->buf_point.buffer_ptr->undo.add_undo_info(current_window->buf_point.curr_line,
+                                                                         current_window->buf_point.curr_idx - 1,
+                                                                         1,
+                                                                         operation_enum::INSERT_CHARACTERS,
+                                                                         lbuffer);
             }
 
             else if(tab)
@@ -768,11 +774,29 @@ static int HandleEvent(const SDL_Event &event)
                         {
                             current_window->buf_point.curr_line = undo_info->curr_line;
                             current_window->buf_point.curr_idx = undo_info->curr_idx;
+                            ASSERT(current_window->buf_point.point_is_valid());
 
                             char buffer[undo_info->data_size + 1];
                             for(auto i = 0_u64; i < undo_info->data_size; ++i)
                                 buffer[i] = undo_info->data_ptr[i];
                             buffer[undo_info->data_size + 1] = 0_i8;
+
+                            for(auto i = 0_u64; i < undo_info->data_size; ++i)
+                            {
+                                // Assert that there is a next character in the line.
+                                {
+                                    current_window->buf_point.curr_idx++;
+                                    ASSERT(current_window->buf_point.point_is_valid());
+                                    current_window->buf_point.curr_idx--;
+
+                                    auto gapb = current_window->buf_point.buffer_ptr->get_line(
+                                        current_window->buf_point.curr_line);
+                                    auto current_character = (* gapb)[current_window->buf_point.curr_idx];
+                                    ASSERT(current_character == undo_info->data_ptr[i]);
+                                }
+
+                                current_window->buf_point.remove_character_forward();
+                            }
 
                             LOG_WARN("Should remove %lu characters. They should be '%s'.",
                                      undo_info->data_size,
