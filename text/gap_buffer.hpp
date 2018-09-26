@@ -18,21 +18,22 @@
 //       SSO'ed.
 
 #define GAP_BUF_SSO
-#define GAP_BUF_SSO_CAP (30 + 8)
-#define GAP_BUF_SSO_ENABLED_BYTE (31 + 8)
-#define GAP_BUF_SSO_GAP_START (data[30 + 8])
-#define GAP_BUF_SSO_GAP_END (data[31 + 8])
+#define GAP_BUF_SSO_ADDITIONAL_SPACE (0)
+#define GAP_BUF_SSO_CAP (30 + GAP_BUF_SSO_ADDITIONAL_SPACE)
+#define GAP_BUF_SSO_ENABLED_BYTE (31 + GAP_BUF_SSO_ADDITIONAL_SPACE)
+#define GAP_BUF_SSO_GAP_START (data[30 + GAP_BUF_SSO_ADDITIONAL_SPACE])
+#define GAP_BUF_SSO_GAP_END (data[31 + GAP_BUF_SSO_ADDITIONAL_SPACE])
 
 struct gap_buffer
 {
 #ifdef GAP_BUF_SSO
     union
     {
-        uint8 data[32 + 8];
+        uint8 data[32 + GAP_BUF_SSO_ADDITIONAL_SPACE];
         struct
         {
 #endif
-            uint8 padding[8];
+            uint8 padding[GAP_BUF_SSO_ADDITIONAL_SPACE];
 
             /// Allocated capacity of the buffer.
             size_t capacity;
@@ -76,10 +77,12 @@ struct gap_buffer
     void move_gap_to_point(size_t point);
 
     /// Place the gap and the end of tha buffer.
+    /// NOTE: For now it assumes that buffer is not sso'ed.
     void move_gap_to_buffer_end();
 
     /// Set the gap size to 'n' characters if is is smaller. Does nothing if the
-    /// gap size is already greater or equal 'n'.
+    /// gap size is already greater or equal 'n'. It assumes that buffer is not
+    /// sso'ed.
     void reserve_gap(size_t n);
 
     /// Insert character at point. Will move the gap to the pointed location if

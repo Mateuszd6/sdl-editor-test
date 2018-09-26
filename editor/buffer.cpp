@@ -121,8 +121,8 @@ namespace editor
     {
         ASSERT(line > 0);
         ASSERT(line < size());
-
         move_gap_to_point(line + 1); // TODO(NEXT): What about it!
+
         auto prev_line = get_line(line - 1);
         auto removed_line = get_line(line);
         auto prev_line_size = prev_line->size();
@@ -133,6 +133,7 @@ namespace editor
         prev_line->reserve_gap(removed_line_size + 16);
         for(auto i = 0_u64; i < removed_line_size; ++i)
             prev_line->insert_at_point(prev_line_idx++, removed_line->get(i));
+
 
         // TODO: Free the memory allocted it the line, just removed.
         gap_start--;
