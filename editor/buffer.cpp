@@ -108,11 +108,9 @@ namespace editor
         auto created_line = get_line(line + 1);
         ASSERT(point <= edited_line->size());
 
-
         for(auto i = point; i < edited_line->size(); ++i)
             created_line->insert_at_point(i - point, edited_line->get(i));
 
-        // TODO: Move gap to the end in the gap_buffer class.
         edited_line->delete_to_the_end_of_line(point);
         return true;
     }
@@ -130,7 +128,7 @@ namespace editor
         auto prev_line_idx = prev_line_size;
 
         // TODO: Don't use the constant. Think about optimal value here!
-        prev_line->reserve_gap(removed_line_size + 16);
+        prev_line->reserve_gap(removed_line_size + 4);
         for(auto i = 0_u64; i < removed_line_size; ++i)
             prev_line->insert_at_point(prev_line_idx++, removed_line->get(i));
 

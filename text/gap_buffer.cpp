@@ -178,6 +178,15 @@ void gap_buffer::insert_at_point(size_t point, uint8 character) // LATIN2 charac
 #endif
 }
 
+#if 0
+void gap_buffer::insert_sequence_at_point(size_t point, misc::length_buffer sequence) // LATIN2 characters only
+{
+    reserve_gap(size() + sequence.length);
+    for(auto i = 0_u64; i < sequence.length; ++i)
+        insert_at_point(point + i, sequence.data[i]);
+}
+#endif
+
 void gap_buffer::replace_at_point(size_t point, uint8 character)
 {
     ASSERT(point < size());

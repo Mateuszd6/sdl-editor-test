@@ -89,6 +89,12 @@ struct gap_buffer
     /// necesarry. Can exapnd buffer memory.
     void insert_at_point(size_t point, uint8 character); // LATIN2 characters only.
 
+#if 0 // TODO(PROFILING): Make this fucntion and use it when it comes to profiling.
+    /// Insert character at point. Will move the gap to the pointed location if
+    /// necesarry. Can exapnd buffer memory.
+    void insert_sequence_at_point(size_t point, misc::length_buffer sequence); // LATIN2 characters only.
+#endif
+
     /// Insert character at point. This doesn't move a gap or expand memory.
     void replace_at_point(size_t point, uint8 character);
 
