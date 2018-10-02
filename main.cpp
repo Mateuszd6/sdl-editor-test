@@ -141,16 +141,18 @@ namespace editor_window_utility
 static int ResizeWindow()
 {
     editor::global::windows_arr[0].UpdateSize(
-        graphics::rectangle {
+        graphics::rectangle
+        {
             0, ::graphics::global::window_h - 17 + 1,
-                ::graphics::global::window_w, 17
-                });
+            ::graphics::global::window_w, 17
+        });
 
     editor::global::windows_arr[1].UpdateSize(
-        graphics::rectangle {
+        graphics::rectangle
+        {
             0, 0,
-                ::graphics::global::window_w, ::graphics::global::window_h - 17
-                });
+            ::graphics::global::window_w, ::graphics::global::window_h - 17
+        });
 
     return 0;
 }

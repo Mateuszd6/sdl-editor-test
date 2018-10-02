@@ -248,8 +248,7 @@ namespace editor
 
             for (auto i = 0; i < number_of_windows-1; ++i)
             {
-                split_idx[i] =
-                    min_pos + static_cast<int>(splits_percentages[i] * difference);
+                split_idx[i] = min_pos + static_cast<int>(splits_percentages[i] * difference);
 
                 // TODO(Splitting lines): Mayby just handle them as part of the buffer?
                 // There is a one pixel space for splitting line.
