@@ -1,3 +1,5 @@
+#include <algorithm>
+
 #include <SDL.h>
 #include <SDL_ttf.h>
 
@@ -99,11 +101,20 @@ namespace platform
         }
     }
 
-    static void blit_letter(int character, ::graphics::rectangle const& rect)
+    static void blit_letter(int character,
+                            int clip_height,
+                            ::graphics::rectangle const& rect)
     {
+        auto surface_to_blit = global::alphabet[character];
+
         auto sdl_rect = SDL_Rect { rect.x, rect.y, rect.width, rect.height };
-        if (FAILED(SDL_BlitSurface(global::alphabet[character],
-                                   nullptr,
+        auto sdl_rect_viewport = SDL_Rect {
+            0, 0,
+            surface_to_blit->w, std::min(surface_to_blit->h, clip_height),
+        };
+
+        if (FAILED(SDL_BlitSurface(surface_to_blit,
+                                   &sdl_rect_viewport,
                                    global::screen,
                                    &sdl_rect)))
         {
@@ -111,11 +122,20 @@ namespace platform
         }
     }
 
-    static void blit_letter_colored(int character, ::graphics::rectangle const& rect)
+    static void blit_letter_colored(int character,
+                                    int clip_height,
+                                    ::graphics::rectangle const& rect)
     {
+        auto surface_to_blit = global::alphabet_colored [character];
+
         auto sdl_rect = SDL_Rect { rect.x, rect.y, rect.width, rect.height };
-        if (FAILED(SDL_BlitSurface(global::alphabet_colored[character],
-                                   nullptr,
+        auto sdl_rect_viewport = SDL_Rect {
+            0, 0,
+            surface_to_blit->w, std::min(surface_to_blit->h, clip_height),
+        };
+
+        if (FAILED(SDL_BlitSurface(surface_to_blit,
+                                   &sdl_rect_viewport,
                                    global::screen,
                                    &sdl_rect)))
         {

@@ -40,6 +40,8 @@ namespace graphics
                 ::platform::get_letter_height()
             };
 
+            auto fixed_height = window_ptr->position.y + window_ptr->position.height - draw_rect.y;
+
 #if 0
             if (draw_rect.x + draw_rect.width > window_ptr->position.x + window_ptr->position.width
                 || draw_rect.y + draw_rect.height > window_ptr->position.y + window_ptr->position.height)
@@ -49,9 +51,9 @@ namespace graphics
             }
 #endif
             if(color)
-                ::platform::blit_letter_colored(text_idx, draw_rect);
+                ::platform::blit_letter_colored(text_idx, fixed_height,draw_rect);
             else
-                ::platform::blit_letter(text_idx, draw_rect);
+                ::platform::blit_letter(text_idx, fixed_height, draw_rect);
         }
 
         // TODO: Make sure that the cursor fits in the window.
