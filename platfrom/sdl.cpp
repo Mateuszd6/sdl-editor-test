@@ -80,7 +80,7 @@ namespace platform
             if (IS_NULL(::platform::global::alphabet[c] =
                         TTF_RenderText_Blended(global::font,
                                                letter,
-                                               SDL_Color {0xF8, 0xF8, 0xF8, 0xFF})))
+                                               SDL_Color {0xF8, 0xF8, 0xF8, 0xFF}))) // 0xF8F8F8
             {
                 PANIC("SDL_TTF internal error. Game Over ;(");
             }

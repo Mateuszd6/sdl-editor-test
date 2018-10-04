@@ -668,7 +668,6 @@ static int HandleEvent(const SDL_Event &event)
 
             auto current_window = (editor::global::windows_arr + 1);
 #endif
-
 #if 1
             if(character != '\0')
             {
@@ -724,24 +723,32 @@ static int HandleEvent(const SDL_Event &event)
             {
                 if (!current_window->buf_point.character_right())
                     LOG_WARN("Cannot move right. No next character.");
+
+                current_window->buf_point.buffer_ptr->undo.stop_current_operation();
             }
 
             else if(arrow == 2)
             {
                 if (!current_window->buf_point.character_left())
                     LOG_WARN("Cannot move left. No previous character.");
+
+                current_window->buf_point.buffer_ptr->undo.stop_current_operation();
             }
 
             else if(arrow == 3)
             {
                 if (!current_window->buf_point.line_up())
                     LOG_WARN("Cannot move up. No previous line.");
+
+                current_window->buf_point.buffer_ptr->undo.stop_current_operation();
             }
 
             else if(arrow == 4)
             {
                 if (!current_window->buf_point.line_down())
                     LOG_WARN("Cannot move down. No next line.");
+
+                current_window->buf_point.buffer_ptr->undo.stop_current_operation();
             }
 
             else if(home)
@@ -794,7 +801,7 @@ static int HandleEvent(const SDL_Event &event)
                                     auto gapb = current_window->buf_point.buffer_ptr->get_line(
                                         current_window->buf_point.curr_line);
                                     auto current_character = (* gapb)[current_window->buf_point.curr_idx];
-                                    ASSERT(current_character == undo_info->data_ptr[i]);
+                                    // ASSERT(current_character == undo_info->data_ptr[i]);
                                 }
 
                                 current_window->buf_point.remove_character_forward();

@@ -45,7 +45,7 @@ struct undo_buffer
 
     bool no_more_undo;
     bool no_more_redo;
-
+    operation_enum current_operation;
 
     operation_info const* undo();
     operation_info const* redo();
@@ -55,6 +55,11 @@ struct undo_buffer
                        uint64 data_size,
                        operation_enum operation,
                        misc::length_buffer text_buffer_weak_ptr);
+
+    // When inserting a sequence of characters we keep the info about it in the
+    // current_operaiton field. When e.g. caret is moved, we must indicate that
+    // the action is stopped.
+    void stop_current_operation();
 
     void DEBUG_print_state() const;
 };

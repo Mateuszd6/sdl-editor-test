@@ -298,7 +298,7 @@ namespace editor
     {
         if (contains_buffer)
         {
-            ::platform::draw_rectangle_on_screen(position, ::graphics::make_color(0x272822));
+            ::platform::draw_rectangle_on_screen(position, ::graphics::make_color(0x161616)); // 0x272822
         }
         else
             for (auto i = 0; i < number_of_windows; ++i)

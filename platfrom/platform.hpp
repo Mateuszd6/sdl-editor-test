@@ -11,6 +11,7 @@ namespace platform
 
     static int get_letter_height();
     static int get_letter_width();
+
 }
 
 #endif // __PLATFORM_PLATFORM_HPP_INCLUDED__

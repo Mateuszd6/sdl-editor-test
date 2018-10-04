@@ -13,6 +13,8 @@ operation_info const* undo_buffer::undo()
         no_more_undo = true;
 
     no_more_redo = false;
+    current_operation = NONE;
+
     return &operations[operation_index--];
 }
 
@@ -26,6 +28,8 @@ operation_info const* undo_buffer::redo()
 
     no_more_undo = false;
     operation_index++;
+    current_operation = NONE;
+
     return &operations[operation_index];
 }
 
@@ -35,6 +39,38 @@ void undo_buffer::add_undo_info(uint64 curr_line,
                                 operation_enum operation,
                                 misc::length_buffer text_buffer_weak_ptr)
 {
+    if(operation == current_operation)
+    {
+        switch(operation)
+        {
+            case INSERT_CHARACTERS:
+            {
+#if 1
+                if(operations[operation_index].data_ptr[operations[operation_index].data_size - 1] != ' '
+                    && text_buffer_weak_ptr.data[0] == ' ')
+                {
+                    // We wont append because we ended up with the space.
+                    break;
+                }
+#endif
+
+                // Append the text to the back.
+                // TODO: Handle the case, when there is not enought memory in data_ptr.
+                memcpy(operations[operation_index].data_ptr + operations[operation_index].data_size,
+                       text_buffer_weak_ptr.data,
+                       data_size);
+                operations[operation_index].data_size += data_size;
+
+                // TODO: For now we assume that we dont over-extend the buffer.
+                buffer_size += data_size;
+                ASSERT(buffer_size < buffer_capacity);
+            } return;
+
+            default:
+                break;
+        }
+    }
+
     if(!no_more_undo) // If the operation is not the first one.
     {
         operation_index++;
@@ -68,6 +104,13 @@ void undo_buffer::add_undo_info(uint64 curr_line,
 
     no_more_redo = true;
     no_more_undo = false;
+
+    current_operation = operation;
+}
+
+void undo_buffer::stop_current_operation()
+{
+    current_operation = NONE;
 }
 
 /* SCENERIO:

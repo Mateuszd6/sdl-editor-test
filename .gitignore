@@ -1,4 +1,3 @@
-bin/*
-
 .clang_complete
 test.txt
+program
