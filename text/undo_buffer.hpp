@@ -39,12 +39,9 @@ struct undo_buffer
 
     operation_info* operations;
 
-    uint32 operation_capacity;
-    uint32 operation_size;
-    uint32 operation_index;
-
-    bool no_more_undo;
-    bool no_more_redo;
+    int32 operation_capacity;
+    int32 operation_size;
+    int32 operation_index;
     operation_enum current_operation;
 
     operation_info const* undo();

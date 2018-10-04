@@ -6,31 +6,20 @@ void undo_buffer::DEBUG_print_state() const
 
 operation_info const* undo_buffer::undo()
 {
-    if(no_more_undo)
+    if(operation_index == -1)
         return nullptr;
 
-    if(operation_index == 0)
-        no_more_undo = true;
-
-    no_more_redo = false;
     current_operation = NONE;
-
     return &operations[operation_index--];
 }
 
 operation_info const* undo_buffer::redo()
 {
-    if(no_more_redo)
+    if(operation_index == operation_size)
         return nullptr;
 
-    if(operation_index == operation_size - 1)
-        no_more_redo = true;
-
-    no_more_undo = false;
-    operation_index++;
     current_operation = NONE;
-
-    return &operations[operation_index];
+    return &operations[operation_index++];
 }
 
 void undo_buffer::add_undo_info(uint64 curr_line,
@@ -71,16 +60,9 @@ void undo_buffer::add_undo_info(uint64 curr_line,
         }
     }
 
-    if(!no_more_undo) // If the operation is not the first one.
-    {
-        operation_index++;
-        operation_size++;
-    }
-    else
-    {
-        operation_index = 0;
-        operation_size = 0;
-    }
+    // Appending to the back
+    operation_index++;
+    operation_size = operation_index + 1;
 
     if(buffer_size + text_buffer_weak_ptr.length >= buffer_capacity)
         PANIC("Should get rid of the old undo data, which is not implemetned");
@@ -102,9 +84,6 @@ void undo_buffer::add_undo_info(uint64 curr_line,
     operations[operation_index].operation = operation;
     operations[operation_index].data_ptr = data_ptr;
 
-    no_more_redo = true;
-    no_more_undo = false;
-
     current_operation = operation;
 }
 
@@ -123,12 +102,10 @@ static void undo_buffer_initialize(undo_buffer* ub)
     ub->buffer = static_cast<uint8*>(malloc(sizeof(uint8) * UNDO_BUFFER_SIZE));
     ub->buffer_size = 0;
     ub->buffer_capacity = UNDO_BUFFER_MAX_SIZE; // TODO!
-    ub->operation_index = 0;
-    ub->operation_index = 0;
+    ub->operation_index = -1;
+    ub->operation_size = 0;
     ub->operation_capacity = 32;
     ub->operations = static_cast<operation_info*>(malloc(sizeof(operation_info) * ub->operation_capacity));
-    ub->no_more_undo = true;
-    ub->no_more_redo = true;
 
     /////
 
