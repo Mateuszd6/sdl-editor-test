@@ -15,11 +15,12 @@ operation_info const* undo_buffer::undo()
 
 operation_info const* undo_buffer::redo()
 {
-    if(operation_index == operation_size)
+    if(operation_index + 1== operation_size)
         return nullptr;
 
     current_operation = NONE;
-    return &operations[operation_index++];
+    operation_index++;
+    return &operations[operation_index];
 }
 
 void undo_buffer::add_undo_info(uint64 curr_line,
