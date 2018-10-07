@@ -1,7 +1,12 @@
 #include <algorithm>
 
 #include <SDL.h>
-#include <SDL_ttf.h>
+// #include <SDL_ttf.h>
+
+// Freetype2:
+#include <ft2build.h>
+#include FT_FREETYPE_H
+#include FT_GLYPH_H
 
 // TODO(Cleanup): Try to use as less globals as possible...
 namespace platform::global
@@ -34,9 +39,10 @@ namespace platform::global
     // TODO(Platform): Make this platform-dependent.
     static SDL_Surface* screen;
 
-    static const int number_of_surfaces = 5;
+#if 0
     static TTF_Font* font;
     static int32 font_ascent;
+#endif
 
 #if 0
     static SDL_Surface* alphabet[256];
@@ -45,12 +51,20 @@ namespace platform::global
     static glyph_data alphabet_[256];
     static glyph_data alphabet_colored_[256];
 #endif
+
+    static FT_Library library;
+    static FT_Face face;
+
+    static int32 line_height;
+
+    static auto ft_font_size = 11 * 64;
 }
 
 namespace platform::detail
 {
     static void set_letter_glyph(int16 letter)
     {
+#if 0
         auto result = TTF_RenderGlyph_Blended(global::font, letter, SDL_Color { 0xF8, 0xF8, 0xF8, 0xFF });
         if(IS_NULL(result))
             PANIC("Could not render letter %d", letter);
@@ -73,6 +87,52 @@ namespace platform::detail
                 TTF_RenderGlyph_Blended(global::font, letter, SDL_Color { 0xF8, 0x10, 0x10, 0xFF });
             global::alphabet_colored_[letter].metrics = global::alphabet_[letter].metrics;
         }
+#else
+        auto error = FT_Load_Char(global::face, letter, FT_LOAD_RENDER);
+        if(error)
+            PANIC("Could not load char! %d", error);
+
+        auto w = global::face->glyph->bitmap.width;
+        auto h = global::face->glyph->bitmap.rows;
+        auto bitmap = global::face->glyph->bitmap.buffer;
+
+        // TODO: Make them global and static!!!
+#if SDL_BYTEORDER == SDL_BIG_ENDIAN
+        auto rmask = 0xff000000;
+        auto gmask = 0x00ff0000;
+        auto bmask = 0x0000ff00;
+        auto amask = 0x000000ff;
+#else
+        auto rmask = 0x000000ff;
+        auto gmask = 0x0000ff00;
+        auto bmask = 0x00ff0000;
+        auto amask = 0xff000000;
+#endif
+
+        // Make and fill the SDL Surface
+        auto surface = SDL_CreateRGBSurface(0, w, h, 32,
+                                            rmask, gmask, bmask, amask);
+        if (surface == nullptr)
+        {
+            PANIC("SDL_CreateRGBSurface() failed: %s", SDL_GetError());
+            exit(1);
+        }
+        uint8* pixels = (uint8*)surface->pixels;
+        for(auto x = 0_u32; x < w; ++x)
+            for(auto y = 0_u32; y < h; ++y)
+                for(auto c = 0; c < 4; ++c)
+                    pixels[4 * (y * w + x) + c] = bitmap[y * w + x];
+
+        // Save the metrics provided by Freetype2 to my metric system.
+        // TODO: x_max, y_max!!!
+        auto metrics = global::face->glyph->metrics;
+        global::alphabet_[letter].metrics.x_min = static_cast<int>(metrics.horiBearingX) / 64;
+        global::alphabet_[letter].metrics.y_min = -static_cast<int>(metrics.horiBearingY) / 64;
+        global::alphabet_[letter].metrics.advance = static_cast<int>(metrics.horiAdvance / 64);
+        global::alphabet_[letter].texture = surface;
+
+        // LOG_INFO("(%d;%d) x (%d;%d)    ->>> %d\n", x0, y0, x1, y1, adv);
+#endif
     }
 }
 
@@ -87,17 +147,44 @@ namespace platform
 
     static void initialize_font(char const* font_path)
     {
-        global::font = TTF_OpenFont(font_path, ::graphics::global::font_size);
-        global::font_ascent = TTF_FontAscent(global::font);
+        // Init the library handle.
+        {
+            auto error = FT_Init_FreeType(&global::library);
+            if(error)
+                PANIC("Error initializing freetype. Game over... :(");
+        }
+
+        // Load the face from the file.
+        {
+            auto error = FT_New_Face(global::library, font_path, 0, &global::face);
+
+            if(error == FT_Err_Unknown_File_Format)
+                PANIC("Font format is unsupported");
+            else if(error)
+                PANIC("Font file could not be opened or read, or is just broken");
+        }
+
+        // Ask the graphics library for the monitors DPI.
+        float ddpi;
+        float hdpi;
+        float vdpi;
+        auto dpi_request_error = SDL_GetDisplayDPI(0, &ddpi, &hdpi, &vdpi);
+        if(dpi_request_error != 0)
+            PANIC("Could not get the scren dpi!");
+        printf("dpi is: %f x %f\n", hdpi, vdpi);
+
+
+        // TODO: Move this to another line.
+        auto pixel_size = global::ft_font_size;
+        auto error = FT_Set_Char_Size(global::face, global::ft_font_size, 0, hdpi, 0 /* vdpi */);
+        if(error)
+            PANIC("Setting the error failed.");
     }
 
     static void destroy_font()
     {
-        return; // TODO: I dont want to free the font yet.
-
-        TTF_CloseFont(global::font);
-        global::font = nullptr;
-        global::font_ascent = 0;
+        // TODO: I dont want to free the font yet.
+        return;
     }
 
     static void run_font_test()
@@ -117,26 +204,36 @@ namespace platform
             }
         }
 
-        // BREAK();
+
+        global::line_height = global::face->size->metrics.height / 64;
+#if 0
+        BREAK();
+#endif
     }
 
-    static void blit_letter(int character,
-                            int clip_height,
-                            ::graphics::rectangle const& rect,
-                            int* advance)
+    static void blit_letter(int16 character, int32 clip_height,
+                            int32 X, int32 Y, int32* advance)
     {
         auto glyph = global::alphabet_[character];
-        auto surface_to_blit = glyph.texture;
-        auto sdl_rect = SDL_Rect { rect.x, rect.y, rect.width, rect.height };
-        auto sdl_rect_viewport = SDL_Rect {
-            glyph.metrics.x_min, global::font_ascent - glyph.metrics.y_max,
-            1000, 1000, // surface_to_blit->w, std::min(surface_to_blit->h, clip_height),
+        auto sdl_rect = SDL_Rect {
+            X + glyph.metrics.x_min,
+            Y + glyph.metrics.y_min,
+            10000,
+            10000, // TODO: Who cares about W and H?
         };
 
-        *advance = glyph.metrics.advance;
-        printf("ADVNCE: %d\n", *advance);
+        auto sdl_rect_viewport = SDL_Rect {
+            0, 0, // -glyph.metrics.y_max, // global::font_ascent - glyph.metrics.y_max,
+            1000, 1000, // glyph.texture->w, std::min(glyph.texture->h, clip_height),
+        };
 
-        if (FAILED(SDL_BlitSurface(surface_to_blit,
+        if(advance)
+        {
+            *advance = glyph.metrics.advance;
+            printf("ADVNCE: %d\n", *advance);
+        }
+
+        if (FAILED(SDL_BlitSurface(glyph.texture,
                                    &sdl_rect_viewport,
                                    global::screen,
                                    &sdl_rect)))
@@ -145,12 +242,10 @@ namespace platform
         }
     }
 
-    static void blit_letter_colored(int character,
-                                    int clip_height,
-                                    ::graphics::rectangle const& rect,
-                                    int* advance)
+    static void blit_letter_colored(int16 character, int32 clip_height,
+                            int32 X, int32 Y, int32* advance)
     {
-        blit_letter(character, clip_height, rect, advance);
+        blit_letter(character, clip_height, X, Y, advance);
 #if 0
         auto surface_to_blit = global::alphabet_colored_[character].texture;
 
@@ -180,6 +275,11 @@ namespace platform
     static int get_letter_width()
     {
         return global::alphabet_[1].texture->w;
+    }
+
+    static int32 get_line_height()
+    {
+        return global::line_height;
     }
 
     static void print_text_line_form_gap_buffer(editor::window const* window_ptr,
@@ -240,7 +340,7 @@ namespace platform
 
         // TODO: There is still no space for the cutted line, and it can easilly be displayed here.
         auto number_of_displayed_lines = static_cast<uint64>(
-            (gap_w->position.height - 2) / ::platform::get_letter_height());
+            (gap_w->position.height - 2) / ::platform::get_line_height());
 
 #if 0
         auto difference = (b_point->starting_from_top
@@ -263,7 +363,7 @@ namespace platform
         auto first_line_offset = (b_point->starting_from_top
                                   ? 0
                                   : (gap_w->position.height - 2) -
-                                  (::platform::get_letter_height() * (number_of_displayed_lines + 1)));
+                                  (::platform::get_line_height() * (number_of_displayed_lines + 1)));
 
         for(auto i = b_point->first_line + (b_point->starting_from_top ? 0 : -1);
             i < b_point->buffer_ptr->size();

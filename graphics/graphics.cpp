@@ -30,7 +30,7 @@ namespace graphics
         auto vertical_offest = 2 + first_line_offset;
 
         auto X = window_ptr->position.x + horizontal_offset;
-        auto Y = window_ptr->position.y + vertical_offest + ::platform::get_letter_height() * line_nr;
+        auto Y = window_ptr->position.y + vertical_offest + ::platform::get_line_height() * (line_nr + 1);
         for (auto i = 0; text[i]; ++i)
         {
             auto text_idx = static_cast<int>(text[i]);
@@ -44,22 +44,16 @@ namespace graphics
 
             // TODO: This does not make much sense. Take a look at it!
             auto fixed_height = window_ptr->position.y + window_ptr->position.height - draw_rect.y;
-#if 0
-            if (draw_rect.x + draw_rect.width > window_ptr->position.x + window_ptr->position.width
-                || draw_rect.y + draw_rect.height > window_ptr->position.y + window_ptr->position.height)
-            {
-                LOG_WARN("Blitting outside the rect: %s", text);
-                break;
-            }
-#endif
+
             // TODO: This looks like a reasonable default:
             auto advance = ::platform::get_letter_width();
+            if(color)
+                ::platform::blit_letter_colored(text_idx, fixed_height, X, Y, &advance);
+            else
+                ::platform::blit_letter(text_idx, fixed_height, X, Y, &advance);
+
             X += advance;
 
-            if(color)
-                ::platform::blit_letter_colored(text_idx, fixed_height, draw_rect, &advance);
-            else
-                ::platform::blit_letter(text_idx, fixed_height, draw_rect, &advance);
         }
 
         // TODO: Make sure that the cursor fits in the window.
@@ -68,9 +62,9 @@ namespace graphics
         {
             auto rect = rectangle {
                 window_ptr->position.x + horizontal_offset + ::platform::get_letter_width() * cursor_idx,
-                window_ptr->position.y + vertical_offest + ::platform::get_letter_height() * line_nr,
+                window_ptr->position.y + vertical_offest  + ::platform::get_line_height() * line_nr,
                 2,
-                ::platform::get_letter_height()
+                ::platform::get_line_height() + vertical_offest
             };
 
             ::platform::draw_rectangle_on_screen(rect, make_color(0xF8F8F8FF));

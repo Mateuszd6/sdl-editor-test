@@ -801,7 +801,7 @@ static int HandleEvent(const SDL_Event &event)
                                     auto gapb = current_window->buf_point.buffer_ptr->get_line(
                                         current_window->buf_point.curr_line);
                                     auto current_character = (* gapb)[current_window->buf_point.curr_idx];
-                                    // ASSERT(current_character == undo_info->data_ptr[i]);
+                                    ASSERT(current_character == undo_info->data_ptr[i]);
                                 }
 
                                 current_window->buf_point.remove_character_forward();
@@ -1165,11 +1165,13 @@ static int InitSDL()
         return -1;
     }
 
+#if 0
     if (FAILED(TTF_Init()))
     {
         // TODO(Debug): Logging.
         return -1;
     }
+#endif
 
     return 0;
 }
@@ -1321,7 +1323,10 @@ int main(void)
 #endif
     }
 
+#if 0
     TTF_Quit();
+#endif
+
     SDL_Quit();
     return 0;
 }
