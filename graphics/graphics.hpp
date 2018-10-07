@@ -35,7 +35,6 @@ namespace graphics
     };
 
     static color make_color(uint32 value);
-
     static void DrawSplittingLine(rectangle const& rect);
 
 #if 0

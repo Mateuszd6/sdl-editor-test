@@ -29,19 +29,21 @@ namespace graphics
         auto horizontal_offset = 2;
         auto vertical_offest = 2 + first_line_offset;
 
+        auto X = window_ptr->position.x + horizontal_offset;
+        auto Y = window_ptr->position.y + vertical_offest + ::platform::get_letter_height() * line_nr;
         for (auto i = 0; text[i]; ++i)
         {
             auto text_idx = static_cast<int>(text[i]);
             auto draw_rect = rectangle {
                 // Only for monospace fonts.
-                window_ptr->position.x + horizontal_offset + ::platform::get_letter_width() * i,
-                window_ptr->position.y + vertical_offest + ::platform::get_letter_height() * line_nr,
+                X,
+                Y,
                 ::platform::get_letter_width(),
                 ::platform::get_letter_height()
             };
 
+            // TODO: This does not make much sense. Take a look at it!
             auto fixed_height = window_ptr->position.y + window_ptr->position.height - draw_rect.y;
-
 #if 0
             if (draw_rect.x + draw_rect.width > window_ptr->position.x + window_ptr->position.width
                 || draw_rect.y + draw_rect.height > window_ptr->position.y + window_ptr->position.height)
@@ -50,10 +52,14 @@ namespace graphics
                 break;
             }
 #endif
+            // TODO: This looks like a reasonable default:
+            auto advance = ::platform::get_letter_width();
+            X += advance;
+
             if(color)
-                ::platform::blit_letter_colored(text_idx, fixed_height,draw_rect);
+                ::platform::blit_letter_colored(text_idx, fixed_height, draw_rect, &advance);
             else
-                ::platform::blit_letter(text_idx, fixed_height, draw_rect);
+                ::platform::blit_letter(text_idx, fixed_height, draw_rect, &advance);
         }
 
         // TODO: Make sure that the cursor fits in the window.

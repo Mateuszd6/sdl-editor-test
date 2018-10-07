@@ -6,6 +6,24 @@
 // TODO(Cleanup): Try to use as less globals as possible...
 namespace platform::global
 {
+    struct glyph_metrics
+    {
+        int32 x_min;
+        int32 x_max;
+        int32 y_min;
+        int32 y_max;
+        int32 advance;
+
+        int32 width() { return x_max - x_min; }
+        int32 height() { return y_max - y_min; }
+    };
+
+    struct glyph_data
+    {
+        SDL_Surface* texture;
+        glyph_metrics metrics;
+    };
+
     // TODO(Platform): Make this platform-dependent.
     static SDL_Window *window;
 
@@ -18,9 +36,44 @@ namespace platform::global
 
     static const int number_of_surfaces = 5;
     static TTF_Font* font;
+    static int32 font_ascent;
+
+#if 0
     static SDL_Surface* alphabet[256];
     static SDL_Surface* alphabet_colored[256];
-    static SDL_Surface* text_surface[number_of_surfaces];
+#else
+    static glyph_data alphabet_[256];
+    static glyph_data alphabet_colored_[256];
+#endif
+}
+
+namespace platform::detail
+{
+    static void set_letter_glyph(int16 letter)
+    {
+        auto result = TTF_RenderGlyph_Blended(global::font, letter, SDL_Color { 0xF8, 0xF8, 0xF8, 0xFF });
+        if(IS_NULL(result))
+            PANIC("Could not render letter %d", letter);
+
+        global::alphabet_[letter].texture = result;
+        auto error = TTF_GlyphMetrics(global::font, letter,
+                                      &global::alphabet_[letter].metrics.x_min,
+                                      &global::alphabet_[letter].metrics.x_max,
+                                      &global::alphabet_[letter].metrics.y_min,
+                                      &global::alphabet_[letter].metrics.y_max,
+                                      &global::alphabet_[letter].metrics.advance);
+
+        if(error)
+            PANIC("Could not load the glyph metrics!");
+
+
+        // TODO: Fix this horrible thing!
+        {
+            global::alphabet_colored_[letter].texture =
+                TTF_RenderGlyph_Blended(global::font, letter, SDL_Color { 0xF8, 0x10, 0x10, 0xFF });
+            global::alphabet_colored_[letter].metrics = global::alphabet_[letter].metrics;
+        }
+    }
 }
 
 namespace platform
@@ -35,83 +88,53 @@ namespace platform
     static void initialize_font(char const* font_path)
     {
         global::font = TTF_OpenFont(font_path, ::graphics::global::font_size);
+        global::font_ascent = TTF_FontAscent(global::font);
     }
 
     static void destroy_font()
     {
+        return; // TODO: I dont want to free the font yet.
+
         TTF_CloseFont(global::font);
         global::font = nullptr;
+        global::font_ascent = 0;
     }
 
     static void run_font_test()
     {
-        if (!(global::text_surface[0] =
-              TTF_RenderText_Solid(global::font,
-                                   "This text is solid.",
-                                   SDL_Color {0xF8, 0xF8, 0xF8, 0xFF}))
-            || !(global::text_surface[1] =
-                 TTF_RenderText_Shaded(global::font,
-                                       "This text is shaded.",
-                                       (SDL_Color){0xF8, 0xF8, 0xF8, 0xFF},
-                                       // SDL_Color {0x15, 0x15, 0x80, 0xFF})) // 0x272822
-                                       SDL_Color { 0x27, 0x28, 0x22, 0xFF}))
-            || !(global::text_surface[2] =
-                 TTF_RenderText_Blended(global::font,
-                                        "This text is smoothed.",
-                                        SDL_Color {0xF8, 0xF8, 0xF8, 0xFF}))
-            || !(global::text_surface[3] =
-                 TTF_RenderText_Blended(global::font,
-                                        "This text is colored.",
-                                        SDL_Color {0xF9, 0x26, 0x72, 0xFF}))
-            || !(global::text_surface[4] =
-                 TTF_RenderText_Blended(global::font,
-                                        "static const auto font_size",
-                                        SDL_Color {0xF9, 0x26, 0x72, 0xFF})))
-        {
-            // TODO(Debug): handle error here, perhaps print TTF_GetError at least.
-            PANIC("SDL_TTF internal error. Game Over ;(");
-        }
-
         for (auto c = 1; c < 128; ++c)
+            detail::set_letter_glyph(c);
+
+        for(auto i = 0; i < 128; ++i)
         {
-            char letter[2];
-            letter[0] = c;
-            letter[1] = '\0';
-            if (IS_NULL(::platform::global::alphabet[c] =
-                        TTF_RenderText_Blended(global::font,
-                                               letter,
-                                               SDL_Color {0xF8, 0xF8, 0xF8, 0xFF}))) // 0xF8F8F8
+            auto metr = global::alphabet_[i].metrics;
+            if(global::alphabet_[i].texture)
             {
-                PANIC("SDL_TTF internal error. Game Over ;(");
+                printf("[%c]:\n\t(%d;%d) x (%d;%d)\n\t(%d;%d)\n",
+                       i,
+                       metr.x_min, metr.y_min, metr.x_max, metr.y_max,
+                       global::alphabet_[i].texture->w, global::alphabet_[i].texture->h);
             }
         }
 
-        for (auto c = 1; c < 128; ++c)
-        {
-            char letter[2];
-            letter[0] = c;
-            letter[1] = '\0';
-            if (IS_NULL(::platform::global::alphabet_colored[c] =
-                        TTF_RenderText_Blended(global::font,
-                                               letter,
-                                               SDL_Color {0xFF, 0x00, 0x00, 0xFF})))
-            {
-                PANIC("SDL_TTF internal error. Game Over ;(");
-            }
-        }
+        // BREAK();
     }
 
     static void blit_letter(int character,
                             int clip_height,
-                            ::graphics::rectangle const& rect)
+                            ::graphics::rectangle const& rect,
+                            int* advance)
     {
-        auto surface_to_blit = global::alphabet[character];
-
+        auto glyph = global::alphabet_[character];
+        auto surface_to_blit = glyph.texture;
         auto sdl_rect = SDL_Rect { rect.x, rect.y, rect.width, rect.height };
         auto sdl_rect_viewport = SDL_Rect {
-            0, 0,
-            surface_to_blit->w, std::min(surface_to_blit->h, clip_height),
+            glyph.metrics.x_min, global::font_ascent - glyph.metrics.y_max,
+            1000, 1000, // surface_to_blit->w, std::min(surface_to_blit->h, clip_height),
         };
+
+        *advance = glyph.metrics.advance;
+        printf("ADVNCE: %d\n", *advance);
 
         if (FAILED(SDL_BlitSurface(surface_to_blit,
                                    &sdl_rect_viewport,
@@ -124,9 +147,12 @@ namespace platform
 
     static void blit_letter_colored(int character,
                                     int clip_height,
-                                    ::graphics::rectangle const& rect)
+                                    ::graphics::rectangle const& rect,
+                                    int* advance)
     {
-        auto surface_to_blit = global::alphabet_colored [character];
+        blit_letter(character, clip_height, rect, advance);
+#if 0
+        auto surface_to_blit = global::alphabet_colored_[character].texture;
 
         auto sdl_rect = SDL_Rect { rect.x, rect.y, rect.width, rect.height };
         auto sdl_rect_viewport = SDL_Rect {
@@ -141,18 +167,19 @@ namespace platform
         {
             PANIC("Bitting surface failed!");
         }
+#endif
     }
 
     // TODO(Cleanup): Make them more safe. The size should be some global setting.
     static int get_letter_height()
     {
-        return global::alphabet[1]->h;
+        return global::alphabet_[1].texture->h;
     }
 
     // TODO(Cleanup): Make them more safe. The size should be some global setting.
     static int get_letter_width()
     {
-        return global::alphabet[1]->w;
+        return global::alphabet_[1].texture->w;
     }
 
     static void print_text_line_form_gap_buffer(editor::window const* window_ptr,
