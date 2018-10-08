@@ -7,6 +7,7 @@
 #include <ft2build.h>
 #include FT_FREETYPE_H
 #include FT_GLYPH_H
+#include FT_OUTLINE_H // TODO: No idea why do I need it!
 
 // TODO(Cleanup): Try to use as less globals as possible...
 namespace platform::global
@@ -57,7 +58,27 @@ namespace platform::global
 
     static int32 line_height;
 
-    static auto ft_font_size = 11 * 64;
+    static auto ft_font_size = 20 * 64;
+
+
+    struct spanner_baton
+    {
+        /* rendering part - assumes 32bpp surface */
+        uint32_t *pixels; // set to the glyph's origin.
+        uint32_t *first_pixel, *last_pixel; // bounds check
+        uint32_t pitch;
+        uint32_t rshift;
+        uint32_t gshift;
+        uint32_t bshift;
+        uint32_t ashift;
+
+        /* sizing part */
+        int min_span_x;
+        int max_span_x;
+        int min_y;
+        int max_y;
+    } ;
+
 }
 
 namespace platform::detail
@@ -88,9 +109,13 @@ namespace platform::detail
             global::alphabet_colored_[letter].metrics = global::alphabet_[letter].metrics;
         }
 #else
-        auto error = FT_Load_Char(global::face, letter, FT_LOAD_RENDER);
+        auto error = FT_Load_Char(global::face, letter, FT_LOAD_FORCE_AUTOHINT | FT_LOAD_DEFAULT);
         if(error)
             PANIC("Could not load char! %d", error);
+
+        error = FT_Render_Glyph(global::face->glyph, FT_RENDER_MODE_NORMAL);
+        if(error)
+            PANIC("Could not render the glyph bitmap!");
 
         auto w = global::face->glyph->bitmap.width;
         auto h = global::face->glyph->bitmap.rows;
@@ -110,8 +135,7 @@ namespace platform::detail
 #endif
 
         // Make and fill the SDL Surface
-        auto surface = SDL_CreateRGBSurface(0, w, h, 32,
-                                            rmask, gmask, bmask, amask);
+        auto surface = SDL_CreateRGBSurface(0, w, h, 32, rmask, gmask, bmask, amask);
         if (surface == nullptr)
         {
             PANIC("SDL_CreateRGBSurface() failed: %s", SDL_GetError());
@@ -175,7 +199,6 @@ namespace platform
 
 
         // TODO: Move this to another line.
-        auto pixel_size = global::ft_font_size;
         auto error = FT_Set_Char_Size(global::face, global::ft_font_size, 0, hdpi, 0 /* vdpi */);
         if(error)
             PANIC("Setting the error failed.");
