@@ -127,9 +127,6 @@ namespace editor_window_utility
             case (::editor::window_traverse_mode::WIN_TRAVERSE_FORWARD):
                 detail::ResizeIthWindowRight(right_parent, index_in_parent);
                 break;
-
-            default:
-                UNREACHABLE();
         }
     }
 }
@@ -832,7 +829,7 @@ static int HandleEvent(const SDL_Event &event)
                             printf("\n");
                         } break;
 
-                        default:
+                        case NONE:
                             PANIC("Operation not supported!");
                             break;
                     }
@@ -904,7 +901,7 @@ static int HandleEvent(const SDL_Event &event)
                             printf("\n");
                         } break;
 
-                        default:
+                        case NONE:
                             PANIC("Operation not supported!");
                             break;
                     }

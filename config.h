@@ -1,5 +1,5 @@
-#ifndef __CONFIG_H_INCLUDED__
-#define __CONFIG_H_INCLUDED__
+#ifndef CONFIG_H_INCLUDED
+#define CONFIG_H_INCLUDED
 
 #include <cstdint>
 #include <stdio.h>
@@ -24,13 +24,13 @@ typedef uint32_t uint32;
 typedef int64_t int64;
 typedef uint64_t uint64;
 
-int8 operator"" _i8(unsigned long long liter) { return static_cast<int8>(liter); }
-uint8 operator"" _u8(unsigned long long liter) { return static_cast<uint8>(liter); }
-int16 operator"" _i16(unsigned long long liter) { return static_cast<int16>(liter); }
-uint16 operator"" _u16(unsigned long long liter) { return static_cast<uint16>(liter); }
-int32 operator"" _i32(unsigned long long liter) { return static_cast<int32>(liter); }
-uint32 operator"" _u32(unsigned long long liter) { return static_cast<uint32>(liter); }
-int64 operator"" _i64(unsigned long long liter) { return static_cast<int64>(liter); }
-uint64 operator"" _u64(unsigned long long liter) { return static_cast<uint64>(liter); }
+inline int8 operator"" _i8(unsigned long long liter) { return static_cast<int8>(liter); }
+inline uint8 operator"" _u8(unsigned long long liter) { return static_cast<uint8>(liter); }
+inline int16 operator"" _i16(unsigned long long liter) { return static_cast<int16>(liter); }
+inline uint16 operator"" _u16(unsigned long long liter) { return static_cast<uint16>(liter); }
+inline int32 operator"" _i32(unsigned long long liter) { return static_cast<int32>(liter); }
+inline uint32 operator"" _u32(unsigned long long liter) { return static_cast<uint32>(liter); }
+inline int64 operator"" _i64(unsigned long long liter) { return static_cast<int64>(liter); }
+inline uint64 operator"" _u64(unsigned long long liter) { return static_cast<uint64>(liter); }
 
-#endif // __CONFIG_H_INCLUDED__
+#endif // CONFIG_H_INCLUDED

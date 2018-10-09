@@ -1,5 +1,5 @@
-#ifndef __EDITOR_BUFFER_HPP_INCLUDED__
-#define __EDITOR_BUFFER_HPP_INCLUDED__
+#ifndef EDITOR_BUFFER_HPP_INCLUDED
+#define EDITOR_BUFFER_HPP_INCLUDED
 
 #include "../text/gap_buffer.hpp"
 #include "../text/undo_buffer.hpp"
@@ -47,7 +47,6 @@ namespace editor
         /// After moving to the larger one, this index is tried to be restored.
         /// This value is ignored when it is equal to -1.
         int64 last_line_idx;
-
         bool starting_from_top;
 
 
@@ -74,4 +73,4 @@ namespace editor
     static buffer_point create_buffer_point(buffer* buffer_ptr);
 }
 
-#endif // __EDITOR_BUFFER_HPP_INCLUDED__
+#endif // EDITOR_BUFFER_HPP_INCLUDED

@@ -11,11 +11,11 @@ namespace editor::global
     static ::editor::window windows_arr[256];
 
     // Index of window that displays currently selected buffer.
-    static int current_window_idx;
+    static int64 current_window_idx;
 
     // Index of active window before entering minibuffer.
     // TODO(Cleanup): Default value.
-    static int window_idx_before_entering_minibuffer;
+    static int64 window_idx_before_entering_minibuffer;
 }
 
 namespace editor
@@ -23,6 +23,7 @@ namespace editor
     static window *CreateNewWindowWithBuffer(buffer* buffer,
                                              window* root_window)
     {
+        // TODO: Clear this shit and make a proper ctor.
         global::windows_arr[global::number_of_windows++] =
             window
             {
@@ -107,9 +108,6 @@ namespace editor
                 return position.height;
             case WIN_SPLIT_HORIZONTAL:
                 return position.width;
-
-            default:
-                UNREACHABLE();
         }
     }
 
@@ -121,9 +119,6 @@ namespace editor
                 return static_cast<float>(position.height) /  ::graphics::global::window_h;
             case WIN_SPLIT_HORIZONTAL:
                 return static_cast<float>(position.width) / ::graphics::global::window_w;
-
-            default:
-                UNREACHABLE();
         }
     }
 
@@ -298,7 +293,7 @@ namespace editor
     {
         if (contains_buffer)
         {
-            ::platform::draw_rectangle_on_screen(position, ::graphics::make_color(0x161616)); // 0x272822
+            ::platform::draw_rectangle_on_screen(position, ::graphics::make_color(0xFFFFFF)); // 0x272822
         }
         else
             for (auto i = 0; i < number_of_windows; ++i)

@@ -38,8 +38,8 @@
 
 // TODO: Add ability not to use chrono.
 
-#ifndef __DEBUG_GOODIES_H__
-#define __DEBUG_GOODIES_H__
+#ifndef DEBUG_GOODIES_H
+#define DEBUG_GOODIES_H
 
 // ------------------- AUXILIARY -------------------
 

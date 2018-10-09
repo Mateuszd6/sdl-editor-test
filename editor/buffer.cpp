@@ -486,7 +486,7 @@ namespace editor
         auto line_size = 0_u64;
         auto line = static_cast<int8*>(malloc(sizeof(int8) * line_capacity));
 
-        line[0] = 0_u64;
+        line[0] = 0_u8;
         auto c = EOF;
         do
         {
@@ -522,7 +522,7 @@ namespace editor
                 ASSERT(line);
             }
 
-            line[line_size++] = c;
+            line[line_size++] = static_cast<uint8>(c);
         }
         while(c != EOF);
 

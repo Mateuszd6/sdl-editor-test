@@ -1,5 +1,5 @@
-#ifndef __UNDO_BUFFER_HPP_INCLUDED__
-#define __UNDO_BUFFER_HPP_INCLUDED__
+#ifndef UNDO_BUFFER_HPP_INCLUDED
+#define UNDO_BUFFER_HPP_INCLUDED
 
 #include "../debug_goodies.h"
 #include "../config.h"

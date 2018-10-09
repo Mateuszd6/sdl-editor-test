@@ -1,13 +1,20 @@
 #include <algorithm>
 
+
+// We ignore all warnings, because parsing the headers of C libraries with
+// Weverything causes a lot of them and they are meaningless.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Weverything"
+
+// SDL2:
 #include <SDL.h>
-// #include <SDL_ttf.h>
 
 // Freetype2:
 #include <ft2build.h>
 #include FT_FREETYPE_H
 #include FT_GLYPH_H
-#include FT_OUTLINE_H // TODO: No idea why do I need it!
+
+#pragma clang diagnostic pop
 
 // TODO(Cleanup): Try to use as less globals as possible...
 namespace platform::global
@@ -40,25 +47,15 @@ namespace platform::global
     // TODO(Platform): Make this platform-dependent.
     static SDL_Surface* screen;
 
-#if 0
-    static TTF_Font* font;
-    static int32 font_ascent;
-#endif
-
-#if 0
-    static SDL_Surface* alphabet[256];
-    static SDL_Surface* alphabet_colored[256];
-#else
     static glyph_data alphabet_[256];
     static glyph_data alphabet_colored_[256];
-#endif
 
     static FT_Library library;
     static FT_Face face;
 
     static int32 line_height;
 
-    static auto ft_font_size = 20 * 64;
+    static auto ft_font_size = 12 * 64;
 
 
     struct spanner_baton
@@ -109,7 +106,8 @@ namespace platform::detail
             global::alphabet_colored_[letter].metrics = global::alphabet_[letter].metrics;
         }
 #else
-        auto error = FT_Load_Char(global::face, letter, FT_LOAD_FORCE_AUTOHINT | FT_LOAD_DEFAULT);
+        // TODO(Cleanup): Add user control over whether or not he wants to autohint fonts!
+        auto error = FT_Load_Char(global::face, letter, FT_LOAD_FORCE_AUTOHINT);
         if(error)
             PANIC("Could not load char! %d", error);
 
@@ -141,11 +139,11 @@ namespace platform::detail
             PANIC("SDL_CreateRGBSurface() failed: %s", SDL_GetError());
             exit(1);
         }
-        uint8* pixels = (uint8*)surface->pixels;
+        auto pixels = static_cast<uint8*>(surface->pixels);
         for(auto x = 0_u32; x < w; ++x)
             for(auto y = 0_u32; y < h; ++y)
                 for(auto c = 0; c < 4; ++c)
-                    pixels[4 * (y * w + x) + c] = bitmap[y * w + x];
+                    pixels[4 * (y * w + x) + c] = (c == 3 ? 1 : 0) * bitmap[y * w + x];
 
         // Save the metrics provided by Freetype2 to my metric system.
         // TODO: x_max, y_max!!!
@@ -154,8 +152,6 @@ namespace platform::detail
         global::alphabet_[letter].metrics.y_min = -static_cast<int>(metrics.horiBearingY) / 64;
         global::alphabet_[letter].metrics.advance = static_cast<int>(metrics.horiAdvance / 64);
         global::alphabet_[letter].texture = surface;
-
-        // LOG_INFO("(%d;%d) x (%d;%d)    ->>> %d\n", x0, y0, x1, y1, adv);
 #endif
     }
 }
@@ -195,11 +191,13 @@ namespace platform
         auto dpi_request_error = SDL_GetDisplayDPI(0, &ddpi, &hdpi, &vdpi);
         if(dpi_request_error != 0)
             PANIC("Could not get the scren dpi!");
-        printf("dpi is: %f x %f\n", hdpi, vdpi);
+        printf("dpi is: %f x %f\n", static_cast<double>(hdpi), static_cast<double>(vdpi));
 
 
         // TODO: Move this to another line.
-        auto error = FT_Set_Char_Size(global::face, global::ft_font_size, 0, hdpi, 0 /* vdpi */);
+        auto error = FT_Set_Char_Size(global::face,
+                                      global::ft_font_size, 0,
+                                      static_cast<int>(hdpi), 0);
         if(error)
             PANIC("Setting the error failed.");
     }
@@ -213,25 +211,14 @@ namespace platform
     static void run_font_test()
     {
         for (auto c = 1; c < 128; ++c)
-            detail::set_letter_glyph(c);
+            detail::set_letter_glyph(static_cast<int16>(c));
 
         for(auto i = 0; i < 128; ++i)
-        {
-            auto metr = global::alphabet_[i].metrics;
-            if(global::alphabet_[i].texture)
-            {
-                printf("[%c]:\n\t(%d;%d) x (%d;%d)\n\t(%d;%d)\n",
-                       i,
-                       metr.x_min, metr.y_min, metr.x_max, metr.y_max,
-                       global::alphabet_[i].texture->w, global::alphabet_[i].texture->h);
-            }
-        }
+            if(!global::alphabet_[i].texture)
+                LOG_ERROR("Could not set character %d\n", i);
 
 
-        global::line_height = global::face->size->metrics.height / 64;
-#if 0
-        BREAK();
-#endif
+        global::line_height = static_cast<int32>(global::face->size->metrics.height) / 64;
     }
 
     static void blit_letter(int16 character, int32 clip_height,
@@ -307,9 +294,9 @@ namespace platform
 
     static void print_text_line_form_gap_buffer(editor::window const* window_ptr,
                                                 gap_buffer const* line,
-                                                int line_nr,
-                                                int current_idx,
-                                                int first_line_additional_offset,
+                                                int64 line_nr,
+                                                int64 current_idx,
+                                                int32 first_line_additional_offset,
                                                 bool start_from_top)
     {
         auto text = line->to_c_str();
@@ -396,7 +383,7 @@ namespace platform
                                             b_point->buffer_ptr->get_line(i),
                                             lines_printed++,
                                             i == b_point->curr_line ? b_point->curr_idx : -1,
-                                            first_line_offset,
+                                            static_cast<int32>(first_line_offset),
                                             b_point->starting_from_top);
 
             // TODO: Check if this is correct in both cases.

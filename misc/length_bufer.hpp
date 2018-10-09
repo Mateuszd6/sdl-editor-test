@@ -1,5 +1,5 @@
-#ifndef __MISC_LENGTH_BUFFER_HPP_INCLUDED__
-#define __MISC_LENGTH_BUFFER_HPP_INCLUDED__
+#ifndef MISC_LENGTH_BUFFER_HPP_INCLUDED
+#define MISC_LENGTH_BUFFER_HPP_INCLUDED
 
 #include "../debug_goodies.h"
 #include "../config.h"

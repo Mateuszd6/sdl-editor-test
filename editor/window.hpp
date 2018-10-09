@@ -1,6 +1,6 @@
 // TODO(Cleaup): This should be totally refactored!
-#ifndef __EDITOR_WINDOW_HPP_INCLUDED__
-#define __EDITOR_WINDOW_HPP_INCLUDED__
+#ifndef EDITOR_WINDOW_HPP_INCLUDED
+#define EDITOR_WINDOW_HPP_INCLUDED
 
 #include "../graphics/graphics.hpp"
 

@@ -1,5 +1,5 @@
-#ifndef __GAP_BUFFER_HPP_INCLUDED__
-#define __GAP_BUFFER_HPP_INCLUDED__
+#ifndef GAP_BUFFER_HPP_INCLUDED
+#define GAP_BUFFER_HPP_INCLUDED
 
 /// Initial size of the gap after initialization.
 #define GAP_BUF_DEFAULT_CAPACITY (80)

@@ -56,7 +56,8 @@ void undo_buffer::add_undo_info(uint64 curr_line,
                 ASSERT(buffer_size < buffer_capacity);
             } return;
 
-            default:
+            case NONE:
+            case REMOVE_CHARACTERS:
                 break;
         }
     }

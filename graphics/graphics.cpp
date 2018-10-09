@@ -2,7 +2,12 @@
 #include "graphics.hpp"
 #include "../platfrom/platform.hpp"
 
+// TODO: Get rid of SDL here!
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Weverything"
 #include <SDL.h>
+#pragma clang diagnostic pop
+
 
 namespace graphics
 {
@@ -21,19 +26,19 @@ namespace graphics
     static void print_text_line(editor::window const* window_ptr,
                                 char const* text,
                                 bool color,
-                                int line_nr, // First visible line of the buffer is 0.
-                                int cursor_idx, // gap_buffer const* line
-                                int first_line_offset,
+                                int64 line_nr, // First visible line of the buffer is 0.
+                                int64 cursor_idx,
+                                int32 first_line_offset,
                                 bool start_from_top)
     {
         auto horizontal_offset = 2;
         auto vertical_offest = 2 + first_line_offset;
 
-        auto X = window_ptr->position.x + horizontal_offset;
-        auto Y = window_ptr->position.y + vertical_offest + ::platform::get_line_height() * (line_nr + 1);
+        auto X = static_cast<int32>(window_ptr->position.x + horizontal_offset);
+        auto Y = static_cast<int32>(window_ptr->position.y + vertical_offest + ::platform::get_line_height() * (line_nr + 1));
         for (auto i = 0; text[i]; ++i)
         {
-            auto text_idx = static_cast<int>(text[i]);
+            auto text_idx = static_cast<int16>(text[i]);
             auto draw_rect = rectangle {
                 // Only for monospace fonts.
                 X,
@@ -61,13 +66,13 @@ namespace graphics
         if (cursor_idx >= 0)
         {
             auto rect = rectangle {
-                window_ptr->position.x + horizontal_offset + ::platform::get_letter_width() * cursor_idx,
-                window_ptr->position.y + vertical_offest  + ::platform::get_line_height() * line_nr,
+                static_cast<int32>(window_ptr->position.x + horizontal_offset + ::platform::get_letter_width() * cursor_idx),
+                static_cast<int32>(window_ptr->position.y + vertical_offest  + ::platform::get_line_height() * line_nr),
                 2,
                 ::platform::get_line_height() + vertical_offest
             };
 
-            ::platform::draw_rectangle_on_screen(rect, make_color(0xF8F8F8FF));
+            ::platform::draw_rectangle_on_screen(rect, make_color(0x0));
         }
     }
 }
