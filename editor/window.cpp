@@ -35,11 +35,33 @@ namespace editor
         return global::windows_arr + global::number_of_windows - 1;
     }
 
+#include <unistd.h>
     // TODO(Cleanup): Would be nice to add them using regular, add-window/buffer API.
     static void initialize_first_window()
     {
         auto mini_buffer = CreateNewBuffer();
-        auto main_window_buffer = create_buffer_from_file("/home/mateusz/work/almost-editor/main.cpp"); // CreateNewBuffer();
+
+        char buf[256];
+
+        // Linux specyfic way to get the application root path.
+        // TODO: Move to platform namespace etc.
+        {
+
+            auto rl_result = readlink("/proc/self/exe", buf, 220); // TODO: handle longer names.
+            auto last = strrchr(buf, '/');
+            ASSERT(last != nullptr);
+            last++;
+            auto filename = "main.cpp";
+            auto i = 0;
+            for(auto fn = filename; *fn;)
+                *last++ = *fn++;
+            *last = 0_i8;
+
+            if(rl_result == -1)
+                PANIC("Could not get the application absolute path!");
+        }
+
+        auto main_window_buffer = create_buffer_from_file(buf);
 
         global::number_of_windows = 2;
         // Window with index 0 contains minibuffer. And is drawn separetely.

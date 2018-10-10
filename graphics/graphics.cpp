@@ -36,7 +36,12 @@ namespace graphics
 
         auto X = static_cast<int32>(window_ptr->position.x + horizontal_offset);
         auto Y = static_cast<int32>(window_ptr->position.y + vertical_offest + ::platform::get_line_height() * (line_nr + 1));
-        for (auto i = 0; text[i]; ++i)
+
+        // We will calculate it as we move character by character.
+        auto cursor_x = X;
+        auto cursor_y = Y;
+        auto i = 0;
+        for (i = 0; text[i]; ++i)
         {
             auto text_idx = static_cast<int16>(text[i]);
             auto draw_rect = rectangle {
@@ -50,7 +55,7 @@ namespace graphics
             // TODO: This does not make much sense. Take a look at it!
             auto fixed_height = window_ptr->position.y + window_ptr->position.height - draw_rect.y;
 
-            // TODO: This looks like a reasonable default:
+            // TODO: This looks like a reasonable default, doesn't it?
             auto advance = ::platform::get_letter_width();
             if(color)
                 ::platform::blit_letter_colored(text_idx, fixed_height, X, Y, &advance);
@@ -58,18 +63,23 @@ namespace graphics
                 ::platform::blit_letter(text_idx, fixed_height, X, Y, &advance);
 
             X += advance;
-
+            if(cursor_idx == i + 1)
+            {
+                cursor_x = X;
+                cursor_y = Y;
+            }
         }
+
 
         // TODO: Make sure that the cursor fits in the window.
         // Draw a cursor.
         if (cursor_idx >= 0)
         {
             auto rect = rectangle {
-                static_cast<int32>(window_ptr->position.x + horizontal_offset + ::platform::get_letter_width() * cursor_idx),
+                static_cast<int32>(cursor_x),
                 static_cast<int32>(window_ptr->position.y + vertical_offest  + ::platform::get_line_height() * line_nr),
                 2,
-                ::platform::get_line_height() + vertical_offest
+                ::platform::get_line_height() // + vertical_offest
             };
 
             ::platform::draw_rectangle_on_screen(rect, make_color(0x0));

@@ -54,6 +54,8 @@ namespace platform::global
     static FT_Face face;
 
     static int32 line_height;
+    static int32 font_ascent;
+    static int32 font_descent;
 
     static auto ft_font_size = 12 * 64;
 
@@ -82,30 +84,6 @@ namespace platform::detail
 {
     static void set_letter_glyph(int16 letter)
     {
-#if 0
-        auto result = TTF_RenderGlyph_Blended(global::font, letter, SDL_Color { 0xF8, 0xF8, 0xF8, 0xFF });
-        if(IS_NULL(result))
-            PANIC("Could not render letter %d", letter);
-
-        global::alphabet_[letter].texture = result;
-        auto error = TTF_GlyphMetrics(global::font, letter,
-                                      &global::alphabet_[letter].metrics.x_min,
-                                      &global::alphabet_[letter].metrics.x_max,
-                                      &global::alphabet_[letter].metrics.y_min,
-                                      &global::alphabet_[letter].metrics.y_max,
-                                      &global::alphabet_[letter].metrics.advance);
-
-        if(error)
-            PANIC("Could not load the glyph metrics!");
-
-
-        // TODO: Fix this horrible thing!
-        {
-            global::alphabet_colored_[letter].texture =
-                TTF_RenderGlyph_Blended(global::font, letter, SDL_Color { 0xF8, 0x10, 0x10, 0xFF });
-            global::alphabet_colored_[letter].metrics = global::alphabet_[letter].metrics;
-        }
-#else
         // TODO(Cleanup): Add user control over whether or not he wants to autohint fonts!
         auto error = FT_Load_Char(global::face, letter, FT_LOAD_FORCE_AUTOHINT);
         if(error)
@@ -132,27 +110,54 @@ namespace platform::detail
         auto amask = 0xff000000;
 #endif
 
+        // TODO: Handle the copypaste once it comes to blittng color surfaces.
         // Make and fill the SDL Surface
-        auto surface = SDL_CreateRGBSurface(0, w, h, 32, rmask, gmask, bmask, amask);
-        if (surface == nullptr)
-        {
-            PANIC("SDL_CreateRGBSurface() failed: %s", SDL_GetError());
-            exit(1);
-        }
-        auto pixels = static_cast<uint8*>(surface->pixels);
-        for(auto x = 0_u32; x < w; ++x)
-            for(auto y = 0_u32; y < h; ++y)
-                for(auto c = 0; c < 4; ++c)
-                    pixels[4 * (y * w + x) + c] = (c == 3 ? 1 : 0) * bitmap[y * w + x];
 
-        // Save the metrics provided by Freetype2 to my metric system.
-        // TODO: x_max, y_max!!!
-        auto metrics = global::face->glyph->metrics;
-        global::alphabet_[letter].metrics.x_min = static_cast<int>(metrics.horiBearingX) / 64;
-        global::alphabet_[letter].metrics.y_min = -static_cast<int>(metrics.horiBearingY) / 64;
-        global::alphabet_[letter].metrics.advance = static_cast<int>(metrics.horiAdvance / 64);
-        global::alphabet_[letter].texture = surface;
-#endif
+        {
+            auto surface = SDL_CreateRGBSurface(0, w, h, 32, rmask, gmask, bmask, amask);
+            if (surface == nullptr)
+            {
+                PANIC("SDL_CreateRGBSurface() failed: %s", SDL_GetError());
+                exit(1);
+            }
+            auto pixels = static_cast<uint8*>(surface->pixels);
+            for(auto x = 0_u32; x < w; ++x)
+                for(auto y = 0_u32; y < h; ++y)
+                    for(auto c = 0; c < 4; ++c)
+                        pixels[4 * (y * w + x) + c] = (c == 3 ? 1 : 0) * bitmap[y * w + x];
+            // Save the metrics provided by Freetype2 to my metric system.
+            // TODO: x_max, y_max!!!
+            auto metrics = global::face->glyph->metrics;
+            global::alphabet_[letter].metrics.x_min = static_cast<int>(metrics.horiBearingX) / 64;
+            global::alphabet_[letter].metrics.y_min = -static_cast<int>(metrics.horiBearingY) / 64;
+            global::alphabet_[letter].metrics.advance = static_cast<int>(metrics.horiAdvance / 64);
+            global::alphabet_[letter].texture = surface;
+        }
+        {
+            auto surface = SDL_CreateRGBSurface(0, w, h, 32, rmask, gmask, bmask, amask);
+            if (surface == nullptr)
+            {
+                PANIC("SDL_CreateRGBSurface() failed: %s", SDL_GetError());
+                exit(1);
+            }
+            auto pixels = static_cast<uint8*>(surface->pixels);
+            for(auto x = 0_u32; x < w; ++x)
+                for(auto y = 0_u32; y < h; ++y)
+                {
+                    pixels[4 * (y * w + x) + 0] = 0xd7;
+                    pixels[4 * (y * w + x) + 1] = 0x3a;
+                    pixels[4 * (y * w + x) + 2] = 0x49;
+                    pixels[4 * (y * w + x) + 3] = bitmap[y * w + x];
+                }
+
+            // Save the metrics provided by Freetype2 to my metric system.
+            // TODO: x_max, y_max!!!
+            auto metrics = global::face->glyph->metrics;
+            global::alphabet_colored_[letter].metrics.x_min = static_cast<int>(metrics.horiBearingX) / 64;
+            global::alphabet_colored_[letter].metrics.y_min = -static_cast<int>(metrics.horiBearingY) / 64;
+            global::alphabet_colored_[letter].metrics.advance = static_cast<int>(metrics.horiAdvance / 64);
+            global::alphabet_colored_[letter].texture = surface;
+        }
     }
 }
 
@@ -213,12 +218,15 @@ namespace platform
         for (auto c = 1; c < 128; ++c)
             detail::set_letter_glyph(static_cast<int16>(c));
 
+        // TODO: Get rid of this!
         for(auto i = 0; i < 128; ++i)
             if(!global::alphabet_[i].texture)
                 LOG_ERROR("Could not set character %d\n", i);
 
 
         global::line_height = static_cast<int32>(global::face->size->metrics.height) / 64;
+        global::font_ascent = static_cast<int32>(global::face->size->metrics.ascender / 64);
+        global::font_descent = static_cast<int32>(global::face->size->metrics.descender / 64);
     }
 
     static void blit_letter(int16 character, int32 clip_height,
@@ -232,19 +240,12 @@ namespace platform
             10000, // TODO: Who cares about W and H?
         };
 
-        auto sdl_rect_viewport = SDL_Rect {
-            0, 0, // -glyph.metrics.y_max, // global::font_ascent - glyph.metrics.y_max,
-            1000, 1000, // glyph.texture->w, std::min(glyph.texture->h, clip_height),
-        };
-
+        // If advance was requested, we will this with such information.
         if(advance)
-        {
             *advance = glyph.metrics.advance;
-            printf("ADVNCE: %d\n", *advance);
-        }
 
         if (FAILED(SDL_BlitSurface(glyph.texture,
-                                   &sdl_rect_viewport,
+                                   nullptr,
                                    global::screen,
                                    &sdl_rect)))
         {
@@ -252,27 +253,29 @@ namespace platform
         }
     }
 
+    // TODO: Handle the copypaste, once it comes to blitting color surfaces.
     static void blit_letter_colored(int16 character, int32 clip_height,
                             int32 X, int32 Y, int32* advance)
     {
-        blit_letter(character, clip_height, X, Y, advance);
-#if 0
-        auto surface_to_blit = global::alphabet_colored_[character].texture;
-
-        auto sdl_rect = SDL_Rect { rect.x, rect.y, rect.width, rect.height };
-        auto sdl_rect_viewport = SDL_Rect {
-            0, 0,
-            surface_to_blit->w, std::min(surface_to_blit->h, clip_height),
+        auto glyph = global::alphabet_colored_[character];
+        auto sdl_rect = SDL_Rect {
+            X + glyph.metrics.x_min,
+            Y + glyph.metrics.y_min,
+            10000,
+            10000, // TODO: Who cares about W and H?
         };
 
-        if (FAILED(SDL_BlitSurface(surface_to_blit,
-                                   &sdl_rect_viewport,
+        // If advance was requested, we will this with such information.
+        if(advance)
+            *advance = glyph.metrics.advance;
+
+        if (FAILED(SDL_BlitSurface(glyph.texture,
+                                   nullptr,
                                    global::screen,
                                    &sdl_rect)))
         {
             PANIC("Bitting surface failed!");
         }
-#endif
     }
 
     // TODO(Cleanup): Make them more safe. The size should be some global setting.
@@ -290,6 +293,16 @@ namespace platform
     static int32 get_line_height()
     {
         return global::line_height;
+    }
+
+    static int32 get_font_ascent()
+    {
+        return global::font_ascent;
+    }
+
+    static int32 get_font_descent()
+    {
+        return global::font_descent;
     }
 
     static void print_text_line_form_gap_buffer(editor::window const* window_ptr,
@@ -373,7 +386,8 @@ namespace platform
         auto first_line_offset = (b_point->starting_from_top
                                   ? 0
                                   : (gap_w->position.height - 2) -
-                                  (::platform::get_line_height() * (number_of_displayed_lines + 1)));
+                                  (::platform::get_line_height() * (number_of_displayed_lines + 1))
+                                  + get_font_descent());
 
         for(auto i = b_point->first_line + (b_point->starting_from_top ? 0 : -1);
             i < b_point->buffer_ptr->size();
