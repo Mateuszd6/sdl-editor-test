@@ -22,18 +22,23 @@ namespace platform::global
     struct glyph_metrics
     {
         int32 x_min;
-        int32 x_max;
         int32 y_min;
+#if 0
+        int32 x_max;
         int32 y_max;
+#endif
         int32 advance;
 
-        int32 width() { return x_max - x_min; }
-        int32 height() { return y_max - y_min; }
+        // int32 width() { return x_max - x_min; }
+        // int32 height() { return y_max - y_min; }
     };
 
     struct glyph_data
     {
-        SDL_Surface* texture;
+        int32 texture_x_offset;
+        int32 texture_y_offset;
+        int32 texture_width;
+        int32 texture_height;
         glyph_metrics metrics;
     };
 
@@ -57,7 +62,7 @@ namespace platform::global
     static int32 font_ascent;
     static int32 font_descent;
 
-    static auto ft_font_size = 12 * 64;
+    static auto ft_font_size = 11 * 64;
 
 
     struct spanner_baton
@@ -76,12 +81,31 @@ namespace platform::global
         int max_span_x;
         int min_y;
         int max_y;
-    } ;
+    };
+}
 
+// TODO: Move or get rid of!
+namespace platform::temp
+{
+    static SDL_Surface* alphabet_texture;
+    static int32 texture_x_offset;
 }
 
 namespace platform::detail
 {
+    // TODO: Make them global and static!!!
+#if SDL_BYTEORDER == SDL_BIG_ENDIAN
+    auto constexpr rmask = 0xff000000;
+    auto constexpr gmask = 0x00ff0000;
+    auto constexpr bmask = 0x0000ff00;
+    auto constexpr amask = 0x000000ff;
+#else
+    auto constexpr rmask = 0x000000ff;
+    auto constexpr gmask = 0x0000ff00;
+    auto constexpr bmask = 0x00ff0000;
+    auto constexpr amask = 0xff000000;
+#endif
+
     static void set_letter_glyph(int16 letter)
     {
         // TODO(Cleanup): Add user control over whether or not he wants to autohint fonts!
@@ -96,19 +120,6 @@ namespace platform::detail
         auto w = global::face->glyph->bitmap.width;
         auto h = global::face->glyph->bitmap.rows;
         auto bitmap = global::face->glyph->bitmap.buffer;
-
-        // TODO: Make them global and static!!!
-#if SDL_BYTEORDER == SDL_BIG_ENDIAN
-        auto rmask = 0xff000000;
-        auto gmask = 0x00ff0000;
-        auto bmask = 0x0000ff00;
-        auto amask = 0x000000ff;
-#else
-        auto rmask = 0x000000ff;
-        auto gmask = 0x0000ff00;
-        auto bmask = 0x00ff0000;
-        auto amask = 0xff000000;
-#endif
 
         // TODO: Handle the copypaste once it comes to blittng color surfaces.
         // Make and fill the SDL Surface
@@ -131,32 +142,14 @@ namespace platform::detail
             global::alphabet_[letter].metrics.x_min = static_cast<int>(metrics.horiBearingX) / 64;
             global::alphabet_[letter].metrics.y_min = -static_cast<int>(metrics.horiBearingY) / 64;
             global::alphabet_[letter].metrics.advance = static_cast<int>(metrics.horiAdvance / 64);
-            global::alphabet_[letter].texture = surface;
-        }
-        {
-            auto surface = SDL_CreateRGBSurface(0, w, h, 32, rmask, gmask, bmask, amask);
-            if (surface == nullptr)
-            {
-                PANIC("SDL_CreateRGBSurface() failed: %s", SDL_GetError());
-                exit(1);
-            }
-            auto pixels = static_cast<uint8*>(surface->pixels);
-            for(auto x = 0_u32; x < w; ++x)
-                for(auto y = 0_u32; y < h; ++y)
-                {
-                    pixels[4 * (y * w + x) + 0] = 0xd7;
-                    pixels[4 * (y * w + x) + 1] = 0x3a;
-                    pixels[4 * (y * w + x) + 2] = 0x49;
-                    pixels[4 * (y * w + x) + 3] = bitmap[y * w + x];
-                }
+            global::alphabet_[letter].texture_x_offset = temp::texture_x_offset;
+            global::alphabet_[letter].texture_y_offset = 1;
+            global::alphabet_[letter].texture_width = w;
+            global::alphabet_[letter].texture_height = h;
 
-            // Save the metrics provided by Freetype2 to my metric system.
-            // TODO: x_max, y_max!!!
-            auto metrics = global::face->glyph->metrics;
-            global::alphabet_colored_[letter].metrics.x_min = static_cast<int>(metrics.horiBearingX) / 64;
-            global::alphabet_colored_[letter].metrics.y_min = -static_cast<int>(metrics.horiBearingY) / 64;
-            global::alphabet_colored_[letter].metrics.advance = static_cast<int>(metrics.horiAdvance / 64);
-            global::alphabet_colored_[letter].texture = surface;
+            SDL_Rect dest_rect{ temp::texture_x_offset, 1, 0, 0 };
+            SDL_BlitSurface(surface, nullptr, temp::alphabet_texture, &dest_rect);
+            temp::texture_x_offset += w + 1;
         }
     }
 }
@@ -205,6 +198,26 @@ namespace platform
                                       static_cast<int>(hdpi), 0);
         if(error)
             PANIC("Setting the error failed.");
+
+        global::line_height = static_cast<int32>(global::face->size->metrics.height) / 64;
+        global::font_ascent = static_cast<int32>(global::face->size->metrics.ascender / 64);
+        global::font_descent = static_cast<int32>(global::face->size->metrics.descender / 64);
+
+        // TODO: Width is far too much. Height might be too small.
+        temp::texture_x_offset = 0;
+        temp::alphabet_texture = SDL_CreateRGBSurface(0,
+                                                      (global::line_height + 10) * 200,
+                                                      global::line_height + 10,
+                                                      32,
+                                                      detail::rmask,
+                                                      detail::gmask,
+                                                      detail::bmask,
+                                                      detail::amask);
+        if (temp::alphabet_texture == nullptr)
+        {
+            PANIC("SDL_CreateRGBSurface() failed: %s", SDL_GetError());
+            exit(1);
+        }
     }
 
     static void destroy_font()
@@ -215,18 +228,14 @@ namespace platform
 
     static void run_font_test()
     {
-        for (auto c = 1; c < 128; ++c)
+        for (auto c = ' '; c < 127; ++c)
             detail::set_letter_glyph(static_cast<int16>(c));
 
-        // TODO: Get rid of this!
-        for(auto i = 0; i < 128; ++i)
-            if(!global::alphabet_[i].texture)
-                LOG_ERROR("Could not set character %d\n", i);
-
-
-        global::line_height = static_cast<int32>(global::face->size->metrics.height) / 64;
-        global::font_ascent = static_cast<int32>(global::face->size->metrics.ascender / 64);
-        global::font_descent = static_cast<int32>(global::face->size->metrics.descender / 64);
+#if 1
+        SDL_FillRect(global::screen, nullptr, 0xFFFFFF);
+        SDL_BlitSurface(temp::alphabet_texture, nullptr, global::screen, nullptr);
+        SDL_UpdateWindowSurface(::platform::global::window);
+#endif
     }
 
     static void blit_letter(int16 character, int32 clip_height,
@@ -244,10 +253,13 @@ namespace platform
         if(advance)
             *advance = glyph.metrics.advance;
 
-        if (FAILED(SDL_BlitSurface(glyph.texture,
-                                   nullptr,
-                                   global::screen,
-                                   &sdl_rect)))
+        auto letter_rect = SDL_Rect{
+            glyph.texture_x_offset, glyph.texture_y_offset,
+            glyph.texture_width, glyph.texture_height,
+        };
+
+        if (FAILED(SDL_BlitSurface(temp::alphabet_texture, &letter_rect,
+                                   global::screen, &sdl_rect)))
         {
             PANIC("Bitting surface failed!");
         }
@@ -257,6 +269,9 @@ namespace platform
     static void blit_letter_colored(int16 character, int32 clip_height,
                             int32 X, int32 Y, int32* advance)
     {
+        blit_letter(character, clip_height, X, Y, advance);
+        return;
+#if 0
         auto glyph = global::alphabet_colored_[character];
         auto sdl_rect = SDL_Rect {
             X + glyph.metrics.x_min,
@@ -276,18 +291,13 @@ namespace platform
         {
             PANIC("Bitting surface failed!");
         }
-    }
-
-    // TODO(Cleanup): Make them more safe. The size should be some global setting.
-    static int get_letter_height()
-    {
-        return global::alphabet_[1].texture->h;
+#endif
     }
 
     // TODO(Cleanup): Make them more safe. The size should be some global setting.
     static int get_letter_width()
     {
-        return global::alphabet_[1].texture->w;
+        return global::alphabet_[' '].metrics.advance;
     }
 
     static int32 get_line_height()

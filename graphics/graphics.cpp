@@ -44,16 +44,9 @@ namespace graphics
         for (i = 0; text[i]; ++i)
         {
             auto text_idx = static_cast<int16>(text[i]);
-            auto draw_rect = rectangle {
-                // Only for monospace fonts.
-                X,
-                Y,
-                ::platform::get_letter_width(),
-                ::platform::get_letter_height()
-            };
 
             // TODO: This does not make much sense. Take a look at it!
-            auto fixed_height = window_ptr->position.y + window_ptr->position.height - draw_rect.y;
+            auto fixed_height = window_ptr->position.y + window_ptr->position.height - Y;
 
             // TODO: This looks like a reasonable default, doesn't it?
             auto advance = ::platform::get_letter_width();
@@ -77,7 +70,9 @@ namespace graphics
         {
             auto rect = rectangle {
                 static_cast<int32>(cursor_x),
-                static_cast<int32>(window_ptr->position.y + vertical_offest  + ::platform::get_line_height() * line_nr),
+                static_cast<int32>(window_ptr->position.y + vertical_offest +
+                                   ::platform::get_line_height() * line_nr -
+                                   platform::get_font_descent()),
                 2,
                 ::platform::get_line_height() // + vertical_offest
             };

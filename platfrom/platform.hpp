@@ -16,6 +16,8 @@ namespace platform
     static int get_letter_height(); // TODO: Try to depracete these
     static int get_letter_width();
 
+    static int32 get_font_ascent();
+    static int32 get_font_descent();
 }
 
 #endif // PLATFORM_PLATFORM_HPP_INCLUDED

@@ -692,7 +692,7 @@ static int HandleEvent(const SDL_Event &event)
             else if(page_up)
             {
                 auto number_of_displayed_lines = static_cast<uint64>(
-                    (current_window->position.height - 2) / ::platform::get_letter_height());
+                    (current_window->position.height - 2) / ::platform::get_line_height());
                 if (!current_window->buf_point.jump_up(number_of_displayed_lines))
                     LOG_WARN("Cannot move up!");
             }
@@ -700,7 +700,7 @@ static int HandleEvent(const SDL_Event &event)
             else if(page_down)
             {
                 auto number_of_displayed_lines = static_cast<uint64>(
-                    (current_window->position.height - 2) / ::platform::get_letter_height());
+                    (current_window->position.height - 2) / ::platform::get_line_height());
                 if (!current_window->buf_point.jump_down(number_of_displayed_lines))
                     LOG_WARN("Cannot move down!");
             }

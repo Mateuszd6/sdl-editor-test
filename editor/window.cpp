@@ -35,14 +35,15 @@ namespace editor
         return global::windows_arr + global::number_of_windows - 1;
     }
 
+// TODO: Get rid of this or at least move to some platform - dependent branch.
 #include <unistd.h>
+
     // TODO(Cleanup): Would be nice to add them using regular, add-window/buffer API.
     static void initialize_first_window()
     {
         auto mini_buffer = CreateNewBuffer();
 
         char buf[256];
-
         // Linux specyfic way to get the application root path.
         // TODO: Move to platform namespace etc.
         {
@@ -51,8 +52,7 @@ namespace editor
             auto last = strrchr(buf, '/');
             ASSERT(last != nullptr);
             last++;
-            auto filename = "main.cpp";
-            auto i = 0;
+            auto filename = "./test.txt";
             for(auto fn = filename; *fn;)
                 *last++ = *fn++;
             *last = 0_i8;

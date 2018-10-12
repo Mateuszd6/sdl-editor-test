@@ -491,8 +491,14 @@ namespace editor
         do
         {
             c = fgetc(file);
+            if(c == EOF && line_size == 0)
+                break;
+
             if(c == '\n' || c == EOF)
             {
+                // TODO: Im not sure if it is correct. Hope it fixed a bug with
+                // adding an empty line after loading the buffer.
+
                 if(!first_line_inserted)
                     first_line_inserted = true;
                 else
@@ -502,11 +508,6 @@ namespace editor
                     result->get_line(line_idx + 1)->insert_at_point(i, line[i]);
 
                 line_idx++;
-#if 0
-                if(line_idx > 220)
-                    break;
-#endif
-
                 line_size = 0;
                 continue;
             }
