@@ -35,13 +35,13 @@ namespace graphics
         auto vertical_offest = 2 + first_line_offset;
 
         auto X = static_cast<int32>(window_ptr->position.x + horizontal_offset);
-        auto Y = static_cast<int32>(window_ptr->position.y + vertical_offest + ::platform::get_line_height() * (line_nr + 1));
+        auto Y = static_cast<int32>(window_ptr->position.y + vertical_offest +
+                                    ::platform::get_line_height() * (line_nr + 1));
 
         // We will calculate it as we move character by character.
         auto cursor_x = X;
         auto cursor_y = Y;
-        auto i = 0;
-        for (i = 0; text[i]; ++i)
+        for (auto i = 0; text[i]; ++i)
         {
             auto text_idx = static_cast<int16>(text[i]);
 
@@ -51,9 +51,13 @@ namespace graphics
             // TODO: This looks like a reasonable default, doesn't it?
             auto advance = ::platform::get_letter_width();
             if(color)
-                ::platform::blit_letter_colored(text_idx, fixed_height, X, Y, &advance);
+                ::platform::blit_letter_colored(text_idx, fixed_height,
+                                                X, Y, &advance,
+                                                &window_ptr->position);
             else
-                ::platform::blit_letter(text_idx, fixed_height, X, Y, &advance);
+                ::platform::blit_letter(text_idx, fixed_height,
+                                        X, Y, &advance,
+                                        &window_ptr->position);
 
             X += advance;
             if(cursor_idx == i + 1)

@@ -239,7 +239,8 @@ namespace platform
     }
 
     static void blit_letter(int16 character, int32 clip_height,
-                            int32 X, int32 Y, int32* advance)
+                            int32 X, int32 Y, int32* advance,
+                            graphics::rectangle const* viewport_rect)
     {
         auto glyph = global::alphabet_[character];
         auto sdl_rect = SDL_Rect {
@@ -253,9 +254,15 @@ namespace platform
         if(advance)
             *advance = glyph.metrics.advance;
 
+        // TODO: Calculations are horriebly horrible but they do work at least.
         auto letter_rect = SDL_Rect{
-            glyph.texture_x_offset, glyph.texture_y_offset,
-            glyph.texture_width, glyph.texture_height,
+            glyph.texture_x_offset,
+            glyph.texture_y_offset,
+            glyph.texture_width,
+            (Y + glyph.metrics.y_min + glyph.texture_height >
+             viewport_rect->y + viewport_rect->height - glyph.texture_height
+             ? viewport_rect->y + viewport_rect->height - (Y + glyph.metrics.y_min)
+             : glyph.texture_height)
         };
 
         if (FAILED(SDL_BlitSurface(temp::alphabet_texture, &letter_rect,
@@ -267,9 +274,10 @@ namespace platform
 
     // TODO: Handle the copypaste, once it comes to blitting color surfaces.
     static void blit_letter_colored(int16 character, int32 clip_height,
-                            int32 X, int32 Y, int32* advance)
+                                    int32 X, int32 Y, int32* advance,
+                                    graphics::rectangle const* viewport_rect)
     {
-        blit_letter(character, clip_height, X, Y, advance);
+        blit_letter(character, clip_height, X, Y, advance, viewport_rect);
         return;
 #if 0
         auto glyph = global::alphabet_colored_[character];
@@ -297,7 +305,7 @@ namespace platform
     // TODO(Cleanup): Make them more safe. The size should be some global setting.
     static int get_letter_width()
     {
-        return global::alphabet_[' '].metrics.advance;
+        return global::alphabet_[static_cast<int32>(' ')].metrics.advance;
     }
 
     static int32 get_line_height()

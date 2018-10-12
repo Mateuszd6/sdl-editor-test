@@ -7,13 +7,14 @@ namespace platform
                                          graphics::color const& col);
 
     static void blit_letter(int16 character, int32 clip_height,
-                            int32 X, int32 Y, int32* advance);
+                            int32 X, int32 Y, int32* advance,
+                            graphics::rectangle const* viewport_rect);
 
     static void blit_letter_colored(int16 character, int32 clip_height,
-                                    int32 X, int32 Y, int32* advance);
+                                    int32 X, int32 Y, int32* advance,
+                                    graphics::rectangle const* viewport_rect);
 
     static int32 get_line_height();
-    static int get_letter_height(); // TODO: Try to depracete these
     static int get_letter_width();
 
     static int32 get_font_ascent();
