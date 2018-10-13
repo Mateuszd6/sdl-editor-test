@@ -150,6 +150,7 @@ namespace platform::detail
             SDL_Rect dest_rect{ temp::texture_x_offset, 1, 0, 0 };
             SDL_BlitSurface(surface, nullptr, temp::alphabet_texture, &dest_rect);
             temp::texture_x_offset += w + 1;
+            SDL_FreeSurface(surface);
         }
     }
 }

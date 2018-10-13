@@ -41,13 +41,12 @@ namespace editor
     // TODO(Cleanup): Would be nice to add them using regular, add-window/buffer API.
     static void initialize_first_window()
     {
+        char buf[256];
         auto mini_buffer = CreateNewBuffer();
 
-        char buf[256];
         // Linux specyfic way to get the application root path.
         // TODO: Move to platform namespace etc.
         {
-
             auto rl_result = readlink("/proc/self/exe", buf, 220); // TODO: handle longer names.
             auto last = strrchr(buf, '/');
             ASSERT(last != nullptr);

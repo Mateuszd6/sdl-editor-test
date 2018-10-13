@@ -8,6 +8,12 @@ all:
 		-Wno-sign-conversion						\
 		-Wno-padded -Wno-zero-length-array				\
 		-Wno-vla-extension -Wno-vla					\
+		-fno-exceptions -fno-rtti					\
 		$(shell sdl2-config --libs --cflags)				\
 		$(shell pkg-config --libs --cflags freetype2) -lSDL2_ttf        \
 		main.cpp -o program
+
+valgr:
+	valgrind --leak-check=full --track-origins=yes --log-file=valg.log      \
+	./program &> /dev/null 						        \
+	&& cat valg.log

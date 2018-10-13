@@ -1227,8 +1227,8 @@ int main(void)
 {
     if (FAILED(InitSDL()))
     {
-        // TODO(Debug): Logging.
-        exit(1);
+       // TODO(Debug): Logging.
+       exit(1);
     }
 
     // NOTE: Some system diagnostics.
@@ -1319,10 +1319,6 @@ int main(void)
             ->DEBUG_print_state();
 #endif
     }
-
-#if 0
-    TTF_Quit();
-#endif
 
     SDL_Quit();
     return 0;
