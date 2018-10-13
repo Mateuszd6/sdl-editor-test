@@ -323,6 +323,68 @@ namespace platform
         return global::font_descent;
     }
 
+    template<typename STR>
+    static void print_text_line(editor::window const* window_ptr,
+                                STR& text,
+                                bool color,
+                                int64 line_nr, // First visible line of the buffer is 0.
+                                int64 cursor_idx,
+                                int32 first_line_offset,
+                                bool start_from_top)
+    {
+        auto horizontal_offset = 2;
+        auto vertical_offest = 2 + first_line_offset;
+
+        auto X = static_cast<int32>(window_ptr->position.x + horizontal_offset);
+        auto Y = static_cast<int32>(window_ptr->position.y + vertical_offest +
+                                    ::platform::get_line_height() * (line_nr + 1));
+
+        // We will calculate it as we move character by character.
+        auto cursor_x = X;
+        auto cursor_y = Y;
+        auto text_len = text.size();
+        for (auto i = 0_u64; i < text_len; ++i)
+        {
+            auto text_idx = static_cast<int16>(text[i]);
+
+            // TODO: This does not make much sense. Take a look at it!
+            auto fixed_height = window_ptr->position.y + window_ptr->position.height - Y;
+
+            // TODO: This looks like a reasonable default, doesn't it?
+            auto advance = ::platform::get_letter_width();
+            if(color)
+                ::platform::blit_letter_colored(text_idx, fixed_height,
+                                                X, Y, &advance,
+                                                &window_ptr->position);
+            else
+                ::platform::blit_letter(text_idx, fixed_height,
+                                        X, Y, &advance,
+                                        &window_ptr->position);
+
+            X += advance;
+            if(static_cast<uint64>(cursor_idx) == i + 1)
+            {
+                cursor_x = X;
+                cursor_y = Y;
+            }
+        }
+
+        // TODO: Make sure that the cursor fits in the window.
+        // Draw a cursor.
+        if (cursor_idx >= 0)
+        {
+            auto rect = graphics::rectangle {
+                static_cast<int32>(cursor_x),
+                static_cast<int32>(window_ptr->position.y + vertical_offest +
+                                   get_line_height() * line_nr - get_font_descent()),
+                2,
+                get_line_height()
+            };
+
+            draw_rectangle_on_screen(rect, graphics::make_color(0x0));
+        }
+    }
+
     static void print_text_line_form_gap_buffer(editor::window const* window_ptr,
                                                 gap_buffer const* line,
                                                 int64 line_nr,
@@ -330,20 +392,19 @@ namespace platform
                                                 int32 first_line_additional_offset,
                                                 bool start_from_top)
     {
-        auto text = line->to_c_str();
-        graphics::print_text_line(window_ptr,
-                                  reinterpret_cast<char const*>(text),
+        print_text_line(window_ptr,
+                        * line,
 #ifdef GAP_BUF_SSO
-                                  line->sso_enabled(),
+                        line->sso_enabled(),
 #else
-                                  false,
+                        false,
 #endif
-                                  line_nr,
-                                  current_idx,
-                                  first_line_additional_offset,
-                                  start_from_top);
+                        line_nr,
+                        current_idx,
+                        first_line_additional_offset,
+                        start_from_top);
 
-        std::free(reinterpret_cast<void*>(const_cast<int8*>(text)));
+        // std::free(reinterpret_cast<void*>(const_cast<int8*>(text)));
     }
 
     // TODO(Cleanup): Check if something here can fail, if not change the type to
