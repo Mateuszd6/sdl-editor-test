@@ -376,7 +376,7 @@ namespace platform
                 static_cast<int32>(cursor_x),
                 static_cast<int32>(window_ptr->position.y + y_offset +
                                    get_line_height() * line_nr - get_font_descent()),
-                2,
+                1,
                 get_line_height()
             };
 
@@ -435,14 +435,9 @@ namespace platform
         auto horizontal_offset = 0;
         auto vertical_offset = 0;
         auto linum_horizontal_offset = 10;
-
-        auto max_linum_digits_visible = std::to_string(std::min(b_point->first_line + number_of_displayed_lines +
-                                                                (b_point->starting_from_top ? 1 : 0),
-                                                                b_point->buffer_ptr->size())).size();
-#if 1
-        LOG_INFO("NUMBER OF LINES: %d",
-                 static_cast<int32>(max_linum_digits_visible));
-#endif
+        auto max_linum_digits_visible = std::to_string(
+            std::min(b_point->first_line + number_of_displayed_lines + (b_point->starting_from_top ? 1 : 0),
+                     b_point->buffer_ptr->size())).size();
 
         auto linum_rect = SDL_Rect{
             gap_w->position.x,
