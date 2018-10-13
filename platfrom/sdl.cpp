@@ -1,5 +1,5 @@
 #include <algorithm>
-
+#include <string>
 
 // We ignore all warnings, because parsing the headers of C libraries with
 // Weverything causes a lot of them and they are meaningless.
@@ -330,14 +330,12 @@ namespace platform
                                 bool color,
                                 int64 line_nr, // First visible line of the buffer is 0.
                                 int64 cursor_idx,
-                                int32 first_line_offset,
+                                int32 x_offset,
+                                int32 y_offset,
                                 bool start_from_top)
     {
-        auto horizontal_offset = 2;
-        auto vertical_offest = 2 + first_line_offset;
-
-        auto X = static_cast<int32>(window_ptr->position.x + horizontal_offset);
-        auto Y = static_cast<int32>(window_ptr->position.y + vertical_offest +
+        auto X = static_cast<int32>(window_ptr->position.x + x_offset);
+        auto Y = static_cast<int32>(window_ptr->position.y + y_offset +
                                     ::platform::get_line_height() * (line_nr + 1));
 
         // We will calculate it as we move character by character.
@@ -376,7 +374,7 @@ namespace platform
         {
             auto rect = graphics::rectangle {
                 static_cast<int32>(cursor_x),
-                static_cast<int32>(window_ptr->position.y + vertical_offest +
+                static_cast<int32>(window_ptr->position.y + y_offset +
                                    get_line_height() * line_nr - get_font_descent()),
                 2,
                 get_line_height()
@@ -384,28 +382,6 @@ namespace platform
 
             draw_rectangle_on_screen(rect, graphics::make_color(0x0));
         }
-    }
-
-    static void print_text_line_form_gap_buffer(editor::window const* window_ptr,
-                                                gap_buffer const* line,
-                                                int64 line_nr,
-                                                int64 current_idx,
-                                                int32 first_line_additional_offset,
-                                                bool start_from_top)
-    {
-        print_text_line(window_ptr,
-                        * line,
-#ifdef GAP_BUF_SSO
-                        line->sso_enabled(),
-#else
-                        false,
-#endif
-                        line_nr,
-                        current_idx,
-                        first_line_additional_offset,
-                        start_from_top);
-
-        // std::free(reinterpret_cast<void*>(const_cast<int8*>(text)));
     }
 
     // TODO(Cleanup): Check if something here can fail, if not change the type to
@@ -431,9 +407,7 @@ namespace platform
         auto mini_buffer_window = (editor::global::windows_arr + 0);
 
         // TODO(Splitting lines): Decide how i want to draw them.
-#if 1
         graphics::DrawSplittingLine({ 0, ::graphics::global::window_h - 17, ::graphics::global::window_w, 1 });
-#endif
 
         mini_buffer_window->redraw(editor::global::current_window_idx == 0);
         main_window->redraw(editor::global::current_window_idx == 1);
@@ -444,12 +418,6 @@ namespace platform
         // TODO: There is still no space for the cutted line, and it can easilly be displayed here.
         auto number_of_displayed_lines = static_cast<uint64>(
             (gap_w->position.height - 2) / ::platform::get_line_height());
-
-#if 0
-        auto difference = (b_point->starting_from_top
-                           ? static_cast<int64>(b_point->curr_line) - static_cast<int64>(b_point->first_line)
-                           : static_cast<int64>(b_point->first_line) - static_cast<int64>(b_point->curr_line));
-#endif
 
         if(b_point->curr_line < b_point->first_line)
         {
@@ -462,6 +430,29 @@ namespace platform
             b_point->first_line = b_point->curr_line - number_of_displayed_lines + 1;
         }
 
+
+        // TODO: Make them global/const?
+        auto horizontal_offset = 0;
+        auto vertical_offset = 0;
+        auto linum_horizontal_offset = 10;
+
+        auto max_linum_digits_visible = std::to_string(std::min(b_point->first_line + number_of_displayed_lines +
+                                                                (b_point->starting_from_top ? 1 : 0),
+                                                                b_point->buffer_ptr->size())).size();
+#if 1
+        LOG_INFO("NUMBER OF LINES: %d",
+                 static_cast<int32>(max_linum_digits_visible));
+#endif
+
+        auto linum_rect = SDL_Rect{
+            gap_w->position.x,
+            gap_w->position.y,
+            static_cast<int32>(max_linum_digits_visible) * get_letter_width() + 2 * linum_horizontal_offset,
+            gap_w->position.height,
+        };
+
+        SDL_FillRect(global::screen, &linum_rect, 0xFFFFFF);
+
         auto lines_printed = 0_u64;
         auto first_line_offset = (b_point->starting_from_top
                                   ? 0
@@ -473,13 +464,20 @@ namespace platform
             i < b_point->buffer_ptr->size();
             ++i)
         {
-            print_text_line_form_gap_buffer(gap_w,
-                                            b_point->buffer_ptr->get_line(i),
-                                            lines_printed++,
-                                            i == b_point->curr_line ? b_point->curr_idx : -1,
-                                            static_cast<int32>(first_line_offset),
-                                            b_point->starting_from_top);
+            auto s = std::to_string(i + 1);
+            print_text_line(gap_w, s, false, lines_printed,
+                            -1,
+                            horizontal_offset + linum_horizontal_offset,
+                            static_cast<int32>(first_line_offset) + vertical_offset,
+                            b_point->starting_from_top);
 
+            print_text_line(gap_w, *b_point->buffer_ptr->get_line(i), false, lines_printed,
+                            i == b_point->curr_line ? b_point->curr_idx : -1,
+                            horizontal_offset + linum_rect.x + linum_rect.w,
+                            static_cast<int32>(first_line_offset) + vertical_offset,
+                            b_point->starting_from_top);
+
+            lines_printed++;
             // TODO: Check if this is correct in both cases.
             auto should_break = lines_printed >= number_of_displayed_lines + 1;
             if(should_break)
