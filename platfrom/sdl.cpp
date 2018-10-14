@@ -62,9 +62,8 @@ namespace platform::global
     static int32 font_ascent;
     static int32 font_descent;
 
-    static auto ft_font_size = 14 * 64;
-
-    static auto background_hex_color = 0x000000; // 0x272822
+    static auto ft_font_size = 11 * 64;
+    static auto background_hex_color = 0x272822; // 0x000000
     static auto foreground_hex_color = 0xFFFFFF; // 0xF92672 0xf6f6f2
 }
 
