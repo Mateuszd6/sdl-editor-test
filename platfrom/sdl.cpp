@@ -62,26 +62,10 @@ namespace platform::global
     static int32 font_ascent;
     static int32 font_descent;
 
-    static auto ft_font_size = 11 * 64;
+    static auto ft_font_size = 14 * 64;
 
-
-    struct spanner_baton
-    {
-        /* rendering part - assumes 32bpp surface */
-        uint32_t *pixels; // set to the glyph's origin.
-        uint32_t *first_pixel, *last_pixel; // bounds check
-        uint32_t pitch;
-        uint32_t rshift;
-        uint32_t gshift;
-        uint32_t bshift;
-        uint32_t ashift;
-
-        /* sizing part */
-        int min_span_x;
-        int max_span_x;
-        int min_y;
-        int max_y;
-    };
+    static auto background_hex_color = 0x000000; // 0x272822
+    static auto foreground_hex_color = 0xFFFFFF; // 0xF92672 0xf6f6f2
 }
 
 // TODO: Move or get rid of!
@@ -109,7 +93,7 @@ namespace platform::detail
     static void set_letter_glyph(int16 letter)
     {
         // TODO(Cleanup): Add user control over whether or not he wants to autohint fonts!
-        auto error = FT_Load_Char(global::face, letter, FT_LOAD_FORCE_AUTOHINT);
+        auto error = FT_Load_Char(global::face, letter, FT_LOAD_FORCE_AUTOHINT); // FT_LOAD_DEFAULT
         if(error)
             PANIC("Could not load char! %d", error);
 
@@ -134,8 +118,13 @@ namespace platform::detail
             auto pixels = static_cast<uint8*>(surface->pixels);
             for(auto x = 0_u32; x < w; ++x)
                 for(auto y = 0_u32; y < h; ++y)
-                    for(auto c = 0; c < 4; ++c)
-                        pixels[4 * (y * w + x) + c] = (c == 3 ? 1 : 0) * bitmap[y * w + x];
+                {
+                    pixels[4 * (y * w + x) + 0] = (global::foreground_hex_color >> 16) & (0xFF);
+                    pixels[4 * (y * w + x) + 1] = (global::foreground_hex_color >> 8) & (0xFF);
+                    pixels[4 * (y * w + x) + 2] = global::foreground_hex_color & (0xFF);
+                    pixels[4 * (y * w + x) + 3] = bitmap[y * w + x];
+                }
+
             // Save the metrics provided by Freetype2 to my metric system.
             // TODO: x_max, y_max!!!
             auto metrics = global::face->glyph->metrics;
@@ -161,7 +150,7 @@ namespace platform
                                          ::graphics::color const& col)
     {
         auto sdl_rect = SDL_Rect { rect.x, rect.y, rect.width, rect.height };
-        SDL_FillRect(global::screen, &sdl_rect, col.int_color);
+        SDL_FillRect(global::screen, &sdl_rect, global::background_hex_color);
     }
 
     static void initialize_font(char const* font_path)
@@ -195,7 +184,7 @@ namespace platform
 
         // TODO: Move this to another line.
         auto error = FT_Set_Char_Size(global::face,
-                                      global::ft_font_size, 0,
+                                      global::ft_font_size , 0,
                                       static_cast<int>(hdpi), 0);
         if(error)
             PANIC("Setting the error failed.");
@@ -231,12 +220,6 @@ namespace platform
     {
         for (auto c = ' '; c < 127; ++c)
             detail::set_letter_glyph(static_cast<int16>(c));
-
-#if 1
-        SDL_FillRect(global::screen, nullptr, 0xFFFFFF);
-        SDL_BlitSurface(temp::alphabet_texture, nullptr, global::screen, nullptr);
-        SDL_UpdateWindowSurface(::platform::global::window);
-#endif
     }
 
     static void blit_letter(int16 character, int32 clip_height,
@@ -324,6 +307,11 @@ namespace platform
         return global::font_descent;
     }
 
+// TODO(EXPREIMENTAL): When comparing to SumblimeText, we move one pixel too
+//                     much.  With this change it looks much better, but I have
+//                     NO FREAKIN' IDEA WHY!!
+#define MOVE_BY_ONE_PX_BACK
+
     template<typename STR>
     static void print_text_line(editor::window const* window_ptr,
                                 STR& text,
@@ -361,6 +349,11 @@ namespace platform
                                         &window_ptr->position);
 
             X += advance;
+
+
+#ifdef MOVE_BY_ONE_PX_BACK
+            X--;
+#endif
             if(static_cast<uint64>(cursor_idx) == i + 1)
             {
                 cursor_x = X;
@@ -373,14 +366,26 @@ namespace platform
         if (cursor_idx >= 0)
         {
             auto rect = graphics::rectangle {
+#ifdef MOVE_BY_ONE_PX_BACK
+                static_cast<int32>(cursor_x - 1),
+#else
                 static_cast<int32>(cursor_x),
+#endif
+
                 static_cast<int32>(window_ptr->position.y + y_offset +
                                    get_line_height() * line_nr - get_font_descent()),
                 1,
+                // Also, the caret seems to be a one px longer in the ST.
+#ifdef MOVE_BY_ONE_PX_BACK
+                get_line_height() + 1
+#else
                 get_line_height()
+#endif
             };
 
-            draw_rectangle_on_screen(rect, graphics::make_color(0x0));
+            auto sdl_rect = SDL_Rect{ rect.x, rect.y, rect.width, rect.height };
+            SDL_FillRect(global::screen, &sdl_rect, global::foreground_hex_color);
+            // draw_rectangle_on_screen(rect, graphics::make_color(global::foreground_hex_color));
         }
     }
 
@@ -446,7 +451,7 @@ namespace platform
             gap_w->position.height,
         };
 
-        SDL_FillRect(global::screen, &linum_rect, 0xFFFFFF);
+        SDL_FillRect(global::screen, &linum_rect, global::background_hex_color);
 
         auto lines_printed = 0_u64;
         auto first_line_offset = (b_point->starting_from_top
