@@ -62,10 +62,23 @@ namespace platform::global
     static int32 font_ascent;
     static int32 font_descent;
 
-    static auto ft_font_size = 11 * 64;
-    static auto background_hex_color = 0x272822; // 0x000000
-    static auto foreground_hex_color = 0xFFFFFF; // 0xF92672 0xf6f6f2
+    static auto ft_font_size = 12 * 64;
+    // NOTE: These colors have 0 alpha!
+    static auto background_hex_color = 0x272822;
+    static auto foreground_hex_color = 0xFFFFFF;
 }
+
+// TODO: Fix the metrics! This is how SDL_TTF handled this.
+#if 0
+    scale = face->size->metrics.y_scale;
+    font->ascent  = FT_CEIL(FT_MulFix(face->ascender, scale));
+    font->descent = FT_CEIL(FT_MulFix(face->descender, scale));
+    font->height  = font->ascent - font->descent + /* baseline */ 1;
+    font->lineskip = FT_CEIL(FT_MulFix(face->height, scale));
+    font->underline_offset = FT_FLOOR(FT_MulFix(face->underline_position, scale));
+    font->underline_height = FT_FLOOR(FT_MulFix(face->underline_thickness, scale))
+#endif
+
 
 // TODO: Move or get rid of!
 namespace platform::temp
@@ -73,6 +86,10 @@ namespace platform::temp
     static SDL_Surface* alphabet_texture;
     static int32 texture_x_offset;
 }
+
+// TODO: Copied from SDL_TTF. These are used to calculate font metrics correctly.
+#define FT_FLOOR(X) ((X & -64) / 64)
+#define FT_CEIL(X)  (((X + 63) & -64) / 64)
 
 namespace platform::detail
 {
@@ -92,7 +109,8 @@ namespace platform::detail
     static void set_letter_glyph(int16 letter)
     {
         // TODO(Cleanup): Add user control over whether or not he wants to autohint fonts!
-        auto error = FT_Load_Char(global::face, letter, FT_LOAD_FORCE_AUTOHINT); // FT_LOAD_DEFAULT
+        auto error = FT_Load_Char(global::face, letter, FT_LOAD_DEFAULT); // FT_LOAD_FORCE_AUTOHINT
+
         if(error)
             PANIC("Could not load char! %d", error);
 
@@ -102,7 +120,24 @@ namespace platform::detail
 
         auto w = global::face->glyph->bitmap.width;
         auto h = global::face->glyph->bitmap.rows;
+
+        // Save the metrics provided by Freetype2 to my metric system.
+        // TODO: x_max, y_max!!!
+        auto metrics = global::face->glyph->metrics;
+        global::alphabet_[letter].metrics.x_min = static_cast<int>(metrics.horiBearingX) / 64;
+        global::alphabet_[letter].metrics.y_min = -static_cast<int>(metrics.horiBearingY) / 64;
+        global::alphabet_[letter].metrics.advance = static_cast<int>(metrics.horiAdvance / 64);
+        global::alphabet_[letter].texture_x_offset = temp::texture_x_offset;
+        global::alphabet_[letter].texture_y_offset = 1;
+        global::alphabet_[letter].texture_width = w;
+        global::alphabet_[letter].texture_height = h;
+
+#define EXP_VERSION 0
+#if !EXP_VERSION
         auto bitmap = global::face->glyph->bitmap.buffer;
+#else
+        auto bitmap = global::face->glyph->bitmap;
+#endif
 
         // TODO: Handle the copypaste once it comes to blittng color surfaces.
         // Make and fill the SDL Surface
@@ -114,26 +149,33 @@ namespace platform::detail
                 PANIC("SDL_CreateRGBSurface() failed: %s", SDL_GetError());
                 exit(1);
             }
+            SDL_FillRect(surface, nullptr, global::foreground_hex_color);
+
             auto pixels = static_cast<uint8*>(surface->pixels);
+#if !EXP_VERSION
             for(auto x = 0_u32; x < w; ++x)
                 for(auto y = 0_u32; y < h; ++y)
                 {
-                    pixels[4 * (y * w + x) + 0] = (global::foreground_hex_color >> 16) & (0xFF);
-                    pixels[4 * (y * w + x) + 1] = (global::foreground_hex_color >> 8) & (0xFF);
-                    pixels[4 * (y * w + x) + 2] = global::foreground_hex_color & (0xFF);
-                    pixels[4 * (y * w + x) + 3] = bitmap[y * w + x];
+                    auto pixel_ptr = reinterpret_cast<int32*>(pixels + (4 * (y * w + x)));
+                    *pixel_ptr |= global::foreground_hex_color | bitmap[y * w + x] << 24;
                 }
+#else
+            auto yoffset = get_font_ascent() - FT_FLOOR(metrics.horiBearingY);
+            for(auto row = 0; row < bitmap.rows; ++row)
+            {
+                if (row + yoffset < 0 || row + yoffset >= surface->h)
+                    continue;
 
-            // Save the metrics provided by Freetype2 to my metric system.
-            // TODO: x_max, y_max!!!
-            auto metrics = global::face->glyph->metrics;
-            global::alphabet_[letter].metrics.x_min = static_cast<int>(metrics.horiBearingX) / 64;
-            global::alphabet_[letter].metrics.y_min = -static_cast<int>(metrics.horiBearingY) / 64;
-            global::alphabet_[letter].metrics.advance = static_cast<int>(metrics.horiAdvance / 64);
-            global::alphabet_[letter].texture_x_offset = temp::texture_x_offset;
-            global::alphabet_[letter].texture_y_offset = 1;
-            global::alphabet_[letter].texture_width = w;
-            global::alphabet_[letter].texture_height = h;
+                auto dst = (Uint32*)(pixels + (row + yoffset) * surface->pitch / 4)
+                    ;
+                auto src = (Uint8*)(bitmap.buffer + bitmap.pitch * row);
+                for(auto col = bitmap.width; col > 0 /* && dst < dst_check */; --col)
+                {
+                    auto alpha = *src++;
+                    *dst++ |= global::foreground_hex_color | (alpha << 24);
+                }
+            }
+#endif
 
             SDL_Rect dest_rect{ temp::texture_x_offset, 1, 0, 0 };
             SDL_BlitSurface(surface, nullptr, temp::alphabet_texture, &dest_rect);
@@ -181,16 +223,44 @@ namespace platform
         printf("dpi is: %f x %f\n", static_cast<double>(hdpi), static_cast<double>(vdpi));
 
 
-        // TODO: Move this to another line.
+        // For now we do not support unscalable fonts.
+        ASSERT(FT_IS_SCALABLE(global::face));
+
+        // This uses the default DPI (for now).
         auto error = FT_Set_Char_Size(global::face,
                                       global::ft_font_size , 0,
-                                      static_cast<int>(hdpi), 0);
+                                      0, 0);
         if(error)
             PANIC("Setting the error failed.");
 
+        /* Get the scalable font metrics for this font */
+        auto scale = global::face->size->metrics.y_scale;
+        global::font_ascent = FT_CEIL(FT_MulFix(global::face->ascender, scale));
+        global::font_descent = FT_CEIL(FT_MulFix(global::face->descender, scale));
+        global::line_height = FT_CEIL(FT_MulFix(global::face->height, scale));
+
+#if 0
+        global::font->height  = global::font->ascent - global::font->descent + /* baseline */ 1;
+        font->lineskip = FT_CEIL(FT_MulFix(face->height, scale));
+        font->underline_offset = FT_FLOOR(FT_MulFix(face->underline_position, scale));
+        font->underline_height = FT_FLOOR(FT_MulFix(face->underline_thickness, scale));
+#endif
+
+#if 0
+        scale = face->size->metrics.y_scale;
+        font->ascent  = FT_CEIL(FT_MulFix(face->ascender, scale));
+        font->descent = FT_CEIL(FT_MulFix(face->descender, scale));
+        font->height  = font->ascent - font->descent + /* baseline */ 1;
+        font->lineskip = FT_CEIL(FT_MulFix(face->height, scale));
+        font->underline_offset = FT_FLOOR(FT_MulFix(face->underline_position, scale));
+        font->underline_height = FT_FLOOR(FT_MulFix(face->underline_thickness, scale))
+#endif
+
+#if 0
         global::line_height = static_cast<int32>(global::face->size->metrics.height) / 64;
         global::font_ascent = static_cast<int32>(global::face->size->metrics.ascender / 64);
         global::font_descent = static_cast<int32>(global::face->size->metrics.descender / 64);
+#endif
 
         // TODO: Width is far too much. Height might be too small.
         temp::texture_x_offset = 0;
@@ -309,8 +379,6 @@ namespace platform
 // TODO(EXPREIMENTAL): When comparing to SumblimeText, we move one pixel too
 //                     much.  With this change it looks much better, but I have
 //                     NO FREAKIN' IDEA WHY!!
-#define MOVE_BY_ONE_PX_BACK
-
     template<typename STR>
     static void print_text_line(editor::window const* window_ptr,
                                 STR& text,
@@ -350,9 +418,6 @@ namespace platform
             X += advance;
 
 
-#ifdef MOVE_BY_ONE_PX_BACK
-            X--;
-#endif
             if(static_cast<uint64>(cursor_idx) == i + 1)
             {
                 cursor_x = X;
@@ -365,21 +430,11 @@ namespace platform
         if (cursor_idx >= 0)
         {
             auto rect = graphics::rectangle {
-#ifdef MOVE_BY_ONE_PX_BACK
-                static_cast<int32>(cursor_x - 1),
-#else
                 static_cast<int32>(cursor_x),
-#endif
-
                 static_cast<int32>(window_ptr->position.y + y_offset +
                                    get_line_height() * line_nr - get_font_descent()),
                 1,
-                // Also, the caret seems to be a one px longer in the ST.
-#ifdef MOVE_BY_ONE_PX_BACK
-                get_line_height() + 1
-#else
                 get_line_height()
-#endif
             };
 
             auto sdl_rect = SDL_Rect{ rect.x, rect.y, rect.width, rect.height };
