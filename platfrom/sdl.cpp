@@ -15,6 +15,7 @@
 #include FT_GLYPH_H
 
 #pragma clang diagnostic pop
+#include "sdl-ttf-cmp.cpp"
 
 // TODO(Cleanup): Try to use as less globals as possible...
 namespace platform::global
@@ -62,7 +63,7 @@ namespace platform::global
     static int32 font_ascent;
     static int32 font_descent;
 
-    static auto ft_font_size = 12 * 64;
+    static auto ft_font_size = 13 * 64;
     // NOTE: These colors have 0 alpha!
     static auto background_hex_color = 0x272822;
     static auto foreground_hex_color = 0xFFFFFF;
@@ -143,7 +144,12 @@ namespace platform::detail
         // Make and fill the SDL Surface
 
         {
-            auto surface = SDL_CreateRGBSurface(0, w, h, 32, rmask, gmask, bmask, amask);
+            SDL_Surface* surface;
+            if(static_cast<char>(letter) != 'S')
+            {
+
+            }
+            surface = SDL_CreateRGBSurface(0, w, h, 32, rmask, gmask, bmask, amask);
             if (surface == nullptr)
             {
                 PANIC("SDL_CreateRGBSurface() failed: %s", SDL_GetError());
@@ -156,8 +162,13 @@ namespace platform::detail
             for(auto x = 0_u32; x < w; ++x)
                 for(auto y = 0_u32; y < h; ++y)
                 {
+                    auto alpha = bitmap[y * w + x];
                     auto pixel_ptr = reinterpret_cast<int32*>(pixels + (4 * (y * w + x)));
-                    *pixel_ptr |= global::foreground_hex_color | bitmap[y * w + x] << 24;
+#if 0
+                    // This is bad, but probobly still better than default.
+                    alpha = (std::min(int((float)alpha * 1.4), 255));
+#endif
+                    *pixel_ptr |= global::foreground_hex_color | (alpha << 24);
                 }
 #else
             auto yoffset = get_font_ascent() - FT_FLOOR(metrics.horiBearingY);
@@ -182,6 +193,9 @@ namespace platform::detail
             temp::texture_x_offset += w + 1;
             SDL_FreeSurface(surface);
         }
+
+        if(static_cast<char>(letter) == 'S')
+            test_sdl_ttf_text(global::face->glyph->bitmap, 0xF6F6F6, 0, 0);
     }
 }
 
@@ -536,6 +550,13 @@ namespace platform
             auto should_break = lines_printed >= number_of_displayed_lines + 1;
             if(should_break)
                 break;
+        }
+
+        // TODO: Test code.
+        if(::global::test_text_surf)
+        {
+            // SDL_FillRect(global::screen, nullptr, 0xFFFF0000);
+            SDL_BlitSurface(::global::test_text_surf, nullptr, global::screen, nullptr);
         }
 
         SDL_UpdateWindowSurface(::platform::global::window);

@@ -411,4 +411,4 @@ constexpr std::size_t lengthof(T (&)[N]) { return N; }
 #endif // test code
 
 
-#endif // __DEBUG_GOODIES_H__
+#endif // DEBUG_GOODIES_H
