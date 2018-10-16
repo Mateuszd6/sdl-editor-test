@@ -15,7 +15,6 @@
 #include FT_GLYPH_H
 
 #pragma clang diagnostic pop
-#include "sdl-ttf-cmp.cpp"
 
 // TODO(Cleanup): Try to use as less globals as possible...
 namespace platform::global
@@ -63,7 +62,7 @@ namespace platform::global
     static int32 font_ascent;
     static int32 font_descent;
 
-    static auto ft_font_size = 13 * 64;
+    static auto ft_font_size = 14 * 64;
     // NOTE: These colors have 0 alpha!
     static auto background_hex_color = 0x272822;
     static auto foreground_hex_color = 0xFFFFFF;
@@ -144,12 +143,7 @@ namespace platform::detail
         // Make and fill the SDL Surface
 
         {
-            SDL_Surface* surface;
-            if(static_cast<char>(letter) != 'S')
-            {
-
-            }
-            surface = SDL_CreateRGBSurface(0, w, h, 32, rmask, gmask, bmask, amask);
+            auto surface = SDL_CreateRGBSurface(0, w, h, 32, rmask, gmask, bmask, amask);
             if (surface == nullptr)
             {
                 PANIC("SDL_CreateRGBSurface() failed: %s", SDL_GetError());
@@ -177,8 +171,7 @@ namespace platform::detail
                 if (row + yoffset < 0 || row + yoffset >= surface->h)
                     continue;
 
-                auto dst = (Uint32*)(pixels + (row + yoffset) * surface->pitch / 4)
-                    ;
+                auto dst = (Uint32*)(pixels + (row + yoffset) * surface->pitch / 4);
                 auto src = (Uint8*)(bitmap.buffer + bitmap.pitch * row);
                 for(auto col = bitmap.width; col > 0 /* && dst < dst_check */; --col)
                 {
@@ -194,8 +187,10 @@ namespace platform::detail
             SDL_FreeSurface(surface);
         }
 
+#if 0
         if(static_cast<char>(letter) == 'S')
             test_sdl_ttf_text(global::face->glyph->bitmap, 0xF6F6F6, 0, 0);
+#endif
     }
 }
 
@@ -278,7 +273,7 @@ namespace platform
 
         // TODO: Width is far too much. Height might be too small.
         temp::texture_x_offset = 0;
-        temp::alphabet_texture = SDL_CreateRGBSurface(0,
+        temp::alphabet_texture = SDL_CreateRGBSurface(SDL_SWSURFACE,
                                                       (global::line_height + 10) * 200,
                                                       global::line_height + 10,
                                                       32,
@@ -291,6 +286,8 @@ namespace platform
             PANIC("SDL_CreateRGBSurface() failed: %s", SDL_GetError());
             exit(1);
         }
+
+        SDL_FillRect(temp::alphabet_texture, nullptr, global::foreground_hex_color);
     }
 
     static void destroy_font()
@@ -550,13 +547,6 @@ namespace platform
             auto should_break = lines_printed >= number_of_displayed_lines + 1;
             if(should_break)
                 break;
-        }
-
-        // TODO: Test code.
-        if(::global::test_text_surf)
-        {
-            // SDL_FillRect(global::screen, nullptr, 0xFFFF0000);
-            SDL_BlitSurface(::global::test_text_surf, nullptr, global::screen, nullptr);
         }
 
         SDL_UpdateWindowSurface(::platform::global::window);
