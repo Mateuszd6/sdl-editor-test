@@ -1,4 +1,3 @@
-# -Wall -Wextra -Wshadow -Wno-write-strings
 all:
 	clang++ -g -O0 -std=c++17 -I .                                          \
 		-Weverything 							\
@@ -10,7 +9,7 @@ all:
 		-Wno-vla-extension -Wno-vla					\
 		-fno-exceptions -fno-rtti					\
 		$(shell sdl2-config --libs --cflags)				\
-		$(shell pkg-config --libs --cflags freetype2) -lSDL2_ttf        \
+		$(shell pkg-config --libs --cflags freetype2)                   \
 		main.cpp -o program
 
 valgr:

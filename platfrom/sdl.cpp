@@ -131,7 +131,8 @@ namespace platform::detail
 
         auto bitmap = global::face->glyph->bitmap.buffer;
 
-        auto surface = SDL_CreateRGBSurface(0, w, h, 32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000);
+        auto surface = SDL_CreateRGBSurface(0, w, h, 32,
+                                            0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000);
         if (surface == nullptr)
         {
             PANIC("SDL_CreateRGBSurface() failed: %s", SDL_GetError());
@@ -236,14 +237,12 @@ namespace platform
 
         // TODO: Width is far too much. Height might be too small.
         temp::texture_x_offset = 0;
-        temp::alphabet_texture = SDL_CreateRGBSurface(SDL_SWSURFACE,
-                                                      (global::line_height + 10) * 200,
-                                                      global::line_height + 10,
-                                                      32,
-                                                      0x00FF0000,
-                                                      0x0000FF00,
-                                                      0x000000FF,
-                                                      0xFF000000);
+        temp::alphabet_texture = SDL_CreateRGBSurface(
+            SDL_SWSURFACE,
+            (global::line_height + 10) * 200,
+            (global::line_height + 10),
+            32,
+            0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000);
 
         if (temp::alphabet_texture == nullptr)
         {
