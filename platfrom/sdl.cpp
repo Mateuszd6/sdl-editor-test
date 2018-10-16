@@ -29,8 +29,10 @@ namespace platform::global
 #endif
         int32 advance;
 
-        // int32 width() { return x_max - x_min; }
-        // int32 height() { return y_max - y_min; }
+#if 0
+        int32 width() { return x_max - x_min; }
+        int32 height() { return y_max - y_min; }
+#endif
     };
 
     struct glyph_data
@@ -61,11 +63,6 @@ namespace platform::global
     static int32 line_height;
     static int32 font_ascent;
     static int32 font_descent;
-
-    static auto ft_font_size = 14 * 64;
-    // NOTE: These colors have 0 alpha!
-    static auto background_hex_color = 0x272822;
-    static auto foreground_hex_color = 0xFFFFFF;
 }
 
 // TODO: Fix the metrics! This is how SDL_TTF handled this.
@@ -132,65 +129,31 @@ namespace platform::detail
         global::alphabet_[letter].texture_width = w;
         global::alphabet_[letter].texture_height = h;
 
-#define EXP_VERSION 0
-#if !EXP_VERSION
         auto bitmap = global::face->glyph->bitmap.buffer;
-#else
-        auto bitmap = global::face->glyph->bitmap;
-#endif
 
-        // TODO: Handle the copypaste once it comes to blittng color surfaces.
-        // Make and fill the SDL Surface
-
+        auto surface = SDL_CreateRGBSurface(0, w, h, 32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000);
+        if (surface == nullptr)
         {
-            auto surface = SDL_CreateRGBSurface(0, w, h, 32, rmask, gmask, bmask, amask);
-            if (surface == nullptr)
-            {
-                PANIC("SDL_CreateRGBSurface() failed: %s", SDL_GetError());
-                exit(1);
-            }
-            SDL_FillRect(surface, nullptr, global::foreground_hex_color);
-
-            auto pixels = static_cast<uint8*>(surface->pixels);
-#if !EXP_VERSION
-            for(auto x = 0_u32; x < w; ++x)
-                for(auto y = 0_u32; y < h; ++y)
-                {
-                    auto alpha = bitmap[y * w + x];
-                    auto pixel_ptr = reinterpret_cast<int32*>(pixels + (4 * (y * w + x)));
-#if 0
-                    // This is bad, but probobly still better than default.
-                    alpha = (std::min(int((float)alpha * 1.4), 255));
-#endif
-                    *pixel_ptr |= global::foreground_hex_color | (alpha << 24);
-                }
-#else
-            auto yoffset = get_font_ascent() - FT_FLOOR(metrics.horiBearingY);
-            for(auto row = 0; row < bitmap.rows; ++row)
-            {
-                if (row + yoffset < 0 || row + yoffset >= surface->h)
-                    continue;
-
-                auto dst = (Uint32*)(pixels + (row + yoffset) * surface->pitch / 4);
-                auto src = (Uint8*)(bitmap.buffer + bitmap.pitch * row);
-                for(auto col = bitmap.width; col > 0 /* && dst < dst_check */; --col)
-                {
-                    auto alpha = *src++;
-                    *dst++ |= global::foreground_hex_color | (alpha << 24);
-                }
-            }
-#endif
-
-            SDL_Rect dest_rect{ temp::texture_x_offset, 1, 0, 0 };
-            SDL_BlitSurface(surface, nullptr, temp::alphabet_texture, &dest_rect);
-            temp::texture_x_offset += w + 1;
-            SDL_FreeSurface(surface);
+            PANIC("SDL_CreateRGBSurface() failed: %s", SDL_GetError());
+            exit(1);
         }
+        SDL_FillRect(surface, nullptr, global::foreground_hex_color);
 
-#if 0
-        if(static_cast<char>(letter) == 'S')
-            test_sdl_ttf_text(global::face->glyph->bitmap, 0xF6F6F6, 0, 0);
-#endif
+        auto pixels = static_cast<uint8*>(surface->pixels);
+        for(auto x = 0_u32; x < w; ++x)
+            for(auto y = 0_u32; y < h; ++y)
+            {
+                auto alpha = bitmap[y * w + x];
+                auto pixel_ptr = reinterpret_cast<int32*>(pixels + (4 * (y * w + x)));
+                *pixel_ptr |= global::foreground_hex_color | (alpha << 24);
+            }
+
+        SDL_Rect source_rect{ 0, 0, static_cast<int32>(w), static_cast<int32>(h) };
+        SDL_Rect dest_rect{ temp::texture_x_offset, 1, 0, 0 };
+        SDL_BlitSurface(surface, &source_rect, temp::alphabet_texture, &dest_rect);
+
+        temp::texture_x_offset += w + 1;
+        SDL_FreeSurface(surface);
     }
 }
 
@@ -200,7 +163,7 @@ namespace platform
                                          ::graphics::color const& col)
     {
         auto sdl_rect = SDL_Rect { rect.x, rect.y, rect.width, rect.height };
-        SDL_FillRect(global::screen, &sdl_rect, global::background_hex_color);
+        SDL_FillRect(global::screen, &sdl_rect, col.int_color);
     }
 
     static void initialize_font(char const* font_path)
@@ -237,7 +200,7 @@ namespace platform
 
         // This uses the default DPI (for now).
         auto error = FT_Set_Char_Size(global::face,
-                                      global::ft_font_size , 0,
+                                      global::font_size * 64, 0,
                                       0, 0);
         if(error)
             PANIC("Setting the error failed.");
@@ -277,10 +240,11 @@ namespace platform
                                                       (global::line_height + 10) * 200,
                                                       global::line_height + 10,
                                                       32,
-                                                      detail::rmask,
-                                                      detail::gmask,
-                                                      detail::bmask,
-                                                      detail::amask);
+                                                      0x00FF0000,
+                                                      0x0000FF00,
+                                                      0x000000FF,
+                                                      0xFF000000);
+
         if (temp::alphabet_texture == nullptr)
         {
             PANIC("SDL_CreateRGBSurface() failed: %s", SDL_GetError());
@@ -448,9 +412,7 @@ namespace platform
                 get_line_height()
             };
 
-            auto sdl_rect = SDL_Rect{ rect.x, rect.y, rect.width, rect.height };
-            SDL_FillRect(global::screen, &sdl_rect, global::foreground_hex_color);
-            // draw_rectangle_on_screen(rect, graphics::make_color(global::foreground_hex_color));
+            draw_rectangle_on_screen(rect, graphics::make_color(global::foreground_hex_color));
         }
     }
 

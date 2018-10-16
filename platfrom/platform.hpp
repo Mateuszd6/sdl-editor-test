@@ -1,6 +1,13 @@
 #ifndef PLATFORM_PLATFORM_HPP_INCLUDED
 #define PLATFORM_PLATFORM_HPP_INCLUDED
 
+namespace platform::global
+{
+    static auto font_size = 14;
+    static auto background_hex_color = 0xF6F6F6; // 0x161616; // 0x272822
+    static auto foreground_hex_color = 0x060606; // 0xFFFFFF
+}
+
 namespace platform
 {
     static void draw_rectangle_on_screen(graphics::rectangle const& rect,
