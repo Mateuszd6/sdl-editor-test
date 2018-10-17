@@ -24,6 +24,9 @@ typedef uint32_t uint32;
 typedef int64_t int64;
 typedef uint64_t uint64;
 
+typedef float real32;
+typedef double real64;
+
 inline int8 operator"" _i8(unsigned long long liter) { return static_cast<int8>(liter); }
 inline uint8 operator"" _u8(unsigned long long liter) { return static_cast<uint8>(liter); }
 inline int16 operator"" _i16(unsigned long long liter) { return static_cast<int16>(liter); }

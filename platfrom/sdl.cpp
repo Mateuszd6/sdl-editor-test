@@ -270,12 +270,22 @@ namespace platform
                             graphics::rectangle const* viewport_rect)
     {
         auto glyph = global::alphabet_[character];
+
+        // If we are rendering 'starting from bottom' the last line might be
+        // cutted from the top, so we make sure we always draw in correctly.
         auto sdl_rect = SDL_Rect {
-            X + glyph.metrics.x_min,
-            Y + glyph.metrics.y_min,
-            10000,
-            10000, // TODO: Who cares about W and H?
+            std::max(X + glyph.metrics.x_min, viewport_rect->x),
+            std::max(Y + glyph.metrics.y_min, viewport_rect->y),
+            0, 0,
         };
+
+        if(sdl_rect.x < 0 || sdl_rect.y < 0)
+        {
+            LOG_ERROR("Glyph metrics seems incorrect. Letter %c will not be blited!",
+                      static_cast<char>(character));
+
+            return;
+        }
 
         // If advance was requested, we will this with such information.
         if(advance)
@@ -292,11 +302,74 @@ namespace platform
              : glyph.texture_height)
         };
 
+#if 0
         if (FAILED(SDL_BlitSurface(temp::alphabet_texture, &letter_rect,
                                    global::screen, &sdl_rect)))
         {
             PANIC("Bitting surface failed!");
         }
+#elif 0
+        auto temp_rect = SDL_Rect{ sdl_rect.x, sdl_rect.y, letter_rect.w, letter_rect.h };
+        SDL_FillRect(global::screen, &temp_rect, global::foreground_hex_color);
+#else
+        // TODO: Not sure what to do if this does not work.
+        ASSERT(global::screen->format->BytesPerPixel == 4);
+
+        auto rmask = global::screen->format->Rmask;
+        auto gmask = global::screen->format->Gmask;
+        auto bmask = global::screen->format->Bmask;
+        auto amask = global::screen->format->Amask;
+
+        auto rshift = __builtin_ffsll(rmask / 0xFF) - 1;
+        auto gshift = __builtin_ffsll(gmask / 0xFF) - 1;
+        auto bshift = __builtin_ffsll(bmask / 0xFF) - 1;
+        auto ashift = __builtin_ffsll(amask / 0xFF) - 1;
+
+#if 1
+        if(sdl_rect.y >= global::screen->h || sdl_rect.x >= global::screen->w)
+            PANIC("Blitting completly outside the surface! This should never happen.");
+#endif
+
+        auto pixels = static_cast<uint32*>(global::screen->pixels);
+        for(int32 y = sdl_rect.y; y < sdl_rect.y + letter_rect.h; ++y)
+            for(int32 x = sdl_rect.x; x < sdl_rect.x + letter_rect.w; ++x)
+            {
+                if(x >= global::screen->w)
+                    continue;
+
+                if(y >= global::screen->h)
+                    goto END;
+
+                auto dest = pixels + y * global::screen->pitch / 4 + x;
+
+                auto aph_tex_x = letter_rect.x + x - sdl_rect.x;
+                auto aph_tex_y = letter_rect.y + y - sdl_rect.y;
+
+                auto alpha = ((*(static_cast<uint32*>(temp::alphabet_texture->pixels) +
+                                 aph_tex_y * temp::alphabet_texture->pitch / 4 +
+                                 aph_tex_x)) & amask) >> ashift;
+                auto alpha_real = static_cast<real32>(alpha) / 255.0f;
+
+                auto dest_r = (global::background_hex_color & rmask) >> rshift;
+                auto dest_g = (global::background_hex_color & gmask) >> gshift;
+                auto dest_b = (global::background_hex_color & bmask) >> bshift;
+
+                auto source_r = (global::foreground_hex_color & rmask) >> rshift;
+                auto source_g = (global::foreground_hex_color & gmask) >> gshift;
+                auto source_b = (global::foreground_hex_color & bmask) >> bshift;
+
+                auto res_r = (1.0f - alpha_real) * dest_r + alpha_real * source_r;
+                auto res_g = (1.0f - alpha_real) * dest_g + alpha_real * source_g;
+                auto res_b = (1.0f - alpha_real) * dest_b + alpha_real * source_b;
+
+                auto res = ((static_cast<uint32>(res_r + 0.5f) << rshift) |
+                            (static_cast<uint32>(res_g + 0.5f) << gshift) |
+                            (static_cast<uint32>(res_b + 0.5f) << bshift));
+
+                *dest = res;
+            }
+#endif
+    END:;
     }
 
     // TODO: Handle the copypaste, once it comes to blitting color surfaces.
@@ -419,8 +492,8 @@ namespace platform
     // void.
     static int redraw_window()
     {
-        ::platform::global::screen = SDL_GetWindowSurface(::platform::global::window);
-        if (!::platform::global::screen)
+        global::screen = SDL_GetWindowSurface(::platform::global::window);
+        if (!global::screen)
             PANIC("Couldnt get the right surface of the window!");
 
         SDL_GetWindowSize(::platform::global::window,

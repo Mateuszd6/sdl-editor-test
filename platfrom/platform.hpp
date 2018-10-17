@@ -4,8 +4,8 @@
 namespace platform::global
 {
     static auto font_size = 14;
-    static auto background_hex_color = 0x272822; // 0x161616 // 0xF6F6F6
-    static auto foreground_hex_color = 0xF6F6F6; // 0xFFFFFF // 0x060606
+    static auto background_hex_color = 0x272822;
+    static auto foreground_hex_color = 0xF6F6F6; // 0xF92672
 }
 
 namespace platform
