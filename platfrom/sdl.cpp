@@ -38,6 +38,12 @@ namespace platform::global
     static int32 line_height;
     static int32 font_ascent;
     static int32 font_descent;
+
+    static int32 font_size = 14;
+    static auto color_scheme = color_scheme_data{
+        0x272822,
+        0xF6F6F6,
+    };
 }
 
 // TODO: Move or get rid of!
@@ -88,7 +94,8 @@ namespace platform::detail
             PANIC("SDL_CreateRGBSurface() failed: %s", SDL_GetError());
             exit(1);
         }
-        SDL_FillRect(surface, nullptr, global::foreground_hex_color);
+
+        SDL_FillRect(surface, nullptr, ::platform::get_curr_scheme().foreground);
 
         auto pixels = static_cast<uint8*>(surface->pixels);
         for(auto x = 0_u32; x < w; ++x)
@@ -96,7 +103,7 @@ namespace platform::detail
             {
                 auto alpha = bitmap[y * w + x];
                 auto pixel_ptr = reinterpret_cast<int32*>(pixels + (4 * (y * w + x)));
-                *pixel_ptr |= global::foreground_hex_color | (alpha << 24);
+                *pixel_ptr |= ::platform::get_curr_scheme().foreground | (alpha << 24);
             }
 
         SDL_Rect source_rect{ 0, 0, static_cast<int32>(w), static_cast<int32>(h) };
@@ -180,7 +187,7 @@ namespace platform
             exit(1);
         }
 
-        SDL_FillRect(temp::alphabet_texture, nullptr, global::foreground_hex_color);
+        SDL_FillRect(temp::alphabet_texture, nullptr, ::platform::get_curr_scheme().foreground);
     }
 
     static void destroy_font()
@@ -280,9 +287,10 @@ namespace platform
                                  aph_tex_x)) & amask) >> ashift;
                 auto alpha_real = static_cast<real32>(alpha) / 255.0f;
 
-                auto dest_r = (global::background_hex_color & rmask) >> rshift;
-                auto dest_g = (global::background_hex_color & gmask) >> gshift;
-                auto dest_b = (global::background_hex_color & bmask) >> bshift;
+                auto dest_r = (
+                    ::platform::get_curr_scheme().background & rmask) >> rshift;
+                auto dest_g = (::platform::get_curr_scheme().background & gmask) >> gshift;
+                auto dest_b = (::platform::get_curr_scheme().background & bmask) >> bshift;
 
                 auto source_r = (color & rmask) >> rshift;
                 auto source_g = (color & gmask) >> gshift;
@@ -334,8 +342,8 @@ namespace platform
     }
 #endif
 
-    // TODO(Cleanup): Make them more safe. The size should be some global setting.
-    static int get_letter_width()
+    // TODO(Cleanup): It is not java, get rid of getters.
+    static int32 get_letter_width()
     {
         return global::alphabet_[static_cast<int32>(' ')].metrics.advance;
     }
@@ -355,11 +363,22 @@ namespace platform
         return global::font_descent;
     }
 
+    static int32 get_font_size()
+    {
+        return global::font_size;
+    }
+
+    static color_scheme_data get_curr_scheme()
+    {
+        return global::color_scheme;
+    }
+
+
     // Remove cursor drawing from here!
     template<typename STR>
     static void print_text_line(editor::window const* window_ptr,
                                 STR& text,
-                                bool color,
+                                int color,
                                 int64 line_nr, // First visible line of the buffer is 0.
                                 int64 cursor_idx,
                                 int32 x_offset,
@@ -387,14 +406,9 @@ namespace platform
 
             // TODO: This looks like a reasonable default, doesn't it?
             auto advance = ::platform::get_letter_width();
-            if(color)
-                ::platform::blit_letter(text_idx, 0xFF0000,
-                                                X, Y, &advance,
-                                                &window_ptr->position);
-            else
-                ::platform::blit_letter(text_idx, global::foreground_hex_color,
-                                        X, Y, &advance,
-                                        &window_ptr->position);
+            ::platform::blit_letter(text_idx, color,
+                                    X, Y, &advance,
+                                    &window_ptr->position);
 
             X += advance;
 
@@ -410,14 +424,17 @@ namespace platform
         if (cursor_idx >= 0)
         {
             auto rect = graphics::rectangle {
-                static_cast<int32>(cursor_x),
+                // TODO: Removing 1 from the caret x position makes it look
+                // exacly like in Siblime, but without subpixler rendering wider
+                // characters don't look great sometimes.
+                static_cast<int32>(cursor_x - 1),
                 static_cast<int32>(window_ptr->position.y + y_offset +
                                    get_line_height() * line_nr - get_font_descent()),
                 1,
                 get_line_height()
             };
 
-            draw_rectangle_on_screen(rect, graphics::make_color(global::foreground_hex_color));
+            draw_rectangle_on_screen(rect, graphics::make_color(::platform::get_curr_scheme().foreground));
         }
     }
 
@@ -444,7 +461,10 @@ namespace platform
         auto mini_buffer_window = (editor::global::windows_arr + 0);
 
         // TODO(Splitting lines): Decide how i want to draw them.
-        graphics::DrawSplittingLine({ 0, ::graphics::global::window_h - 17, ::graphics::global::window_w, 1 });
+        graphics::DrawSplittingLine({
+                0, ::graphics::global::window_h - 17,
+                ::graphics::global::window_w, 1
+            });
 
         mini_buffer_window->redraw(editor::global::current_window_idx == 0);
         main_window->redraw(editor::global::current_window_idx == 1);
@@ -467,13 +487,13 @@ namespace platform
             b_point->first_line = b_point->curr_line - number_of_displayed_lines + 1;
         }
 
-
         // TODO: Make them global/const?
         auto horizontal_offset = 0;
         auto vertical_offset = 0;
         auto linum_horizontal_offset = 10;
         auto max_linum_digits_visible = std::to_string(
-            std::min(b_point->first_line + number_of_displayed_lines + (b_point->starting_from_top ? 1 : 0),
+            std::min(b_point->first_line + number_of_displayed_lines +
+                     (b_point->starting_from_top ? 1 : 0),
                      b_point->buffer_ptr->size())).size();
 
         auto linum_rect = SDL_Rect{
@@ -482,8 +502,7 @@ namespace platform
             static_cast<int32>(max_linum_digits_visible) * get_letter_width() + 2 * linum_horizontal_offset,
             gap_w->position.height,
         };
-
-        SDL_FillRect(global::screen, &linum_rect, global::background_hex_color);
+        SDL_FillRect(global::screen, &linum_rect, ::platform::get_curr_scheme().background);
 
         auto lines_printed = 0_u64;
         auto first_line_offset = (b_point->starting_from_top
@@ -497,13 +516,19 @@ namespace platform
             ++i)
         {
             auto s = std::to_string(i + 1);
-            print_text_line(gap_w, s, false, lines_printed,
+            print_text_line(gap_w,
+                            s,
+                            0x8f908a,
+                            lines_printed,
                             -1,
                             horizontal_offset + linum_horizontal_offset,
                             static_cast<int32>(first_line_offset) + vertical_offset,
                             b_point->starting_from_top);
 
-            print_text_line(gap_w, *b_point->buffer_ptr->get_line(i), false, lines_printed,
+            print_text_line(gap_w,
+                            *b_point->buffer_ptr->get_line(i),
+                            0xFFFFFF,
+                            lines_printed,
                             i == b_point->curr_line ? b_point->curr_idx : -1,
                             horizontal_offset + linum_rect.x + linum_rect.w,
                             static_cast<int32>(first_line_offset) + vertical_offset,

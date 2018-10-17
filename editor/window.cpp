@@ -314,7 +314,8 @@ namespace editor
     {
         if (contains_buffer)
         {
-            ::platform::draw_rectangle_on_screen(position, ::graphics::make_color(::platform::global::background_hex_color));
+            ::platform::draw_rectangle_on_screen(
+                position, ::graphics::make_color(::platform::get_curr_scheme().background));
         }
         else
             for (auto i = 0; i < number_of_windows; ++i)
