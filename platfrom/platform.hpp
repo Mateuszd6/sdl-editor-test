@@ -30,6 +30,8 @@ namespace platform
     {
         uint32 background;
         uint32 foreground;
+        uint32 keyword;
+        uint32 linum;
     };
 
     static void draw_rectangle_on_screen(graphics::rectangle const& rect,

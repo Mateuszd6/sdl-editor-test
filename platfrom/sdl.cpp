@@ -40,9 +40,11 @@ namespace platform::global
     static int32 font_descent;
 
     static int32 font_size = 14;
-    static auto color_scheme = color_scheme_data{
+    static auto color_scheme = color_scheme_data{ // Monokai color theme.
         0x272822,
         0xF6F6F6,
+        0xF92672,
+        0x8f908a,
     };
 }
 
@@ -373,7 +375,6 @@ namespace platform
         return global::color_scheme;
     }
 
-
     // Remove cursor drawing from here!
     template<typename STR>
     static void print_text_line(editor::window const* window_ptr,
@@ -518,7 +519,7 @@ namespace platform
             auto s = std::to_string(i + 1);
             print_text_line(gap_w,
                             s,
-                            0x8f908a,
+                            get_curr_scheme().linum,
                             lines_printed,
                             -1,
                             horizontal_offset + linum_horizontal_offset,
@@ -527,7 +528,9 @@ namespace platform
 
             print_text_line(gap_w,
                             *b_point->buffer_ptr->get_line(i),
-                            0xFFFFFF,
+                            (b_point->buffer_ptr->get_line(i)->sso_enabled()
+                             ? get_curr_scheme().keyword
+                             : get_curr_scheme().foreground),
                             lines_printed,
                             i == b_point->curr_line ? b_point->curr_idx : -1,
                             horizontal_offset + linum_rect.x + linum_rect.w,
