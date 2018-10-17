@@ -19,31 +19,6 @@
 // TODO(Cleanup): Try to use as less globals as possible...
 namespace platform::global
 {
-    struct glyph_metrics
-    {
-        int32 x_min;
-        int32 y_min;
-#if 0
-        int32 x_max;
-        int32 y_max;
-#endif
-        int32 advance;
-
-#if 0
-        int32 width() { return x_max - x_min; }
-        int32 height() { return y_max - y_min; }
-#endif
-    };
-
-    struct glyph_data
-    {
-        int32 texture_x_offset;
-        int32 texture_y_offset;
-        int32 texture_width;
-        int32 texture_height;
-        glyph_metrics metrics;
-    };
-
     // TODO(Platform): Make this platform-dependent.
     static SDL_Window *window;
 
@@ -65,18 +40,6 @@ namespace platform::global
     static int32 font_descent;
 }
 
-// TODO: Fix the metrics! This is how SDL_TTF handled this.
-#if 0
-    scale = face->size->metrics.y_scale;
-    font->ascent  = FT_CEIL(FT_MulFix(face->ascender, scale));
-    font->descent = FT_CEIL(FT_MulFix(face->descender, scale));
-    font->height  = font->ascent - font->descent + /* baseline */ 1;
-    font->lineskip = FT_CEIL(FT_MulFix(face->height, scale));
-    font->underline_offset = FT_FLOOR(FT_MulFix(face->underline_position, scale));
-    font->underline_height = FT_FLOOR(FT_MulFix(face->underline_thickness, scale))
-#endif
-
-
 // TODO: Move or get rid of!
 namespace platform::temp
 {
@@ -90,19 +53,6 @@ namespace platform::temp
 
 namespace platform::detail
 {
-    // TODO: Make them global and static!!!
-#if SDL_BYTEORDER == SDL_BIG_ENDIAN
-    auto constexpr rmask = 0xff000000;
-    auto constexpr gmask = 0x00ff0000;
-    auto constexpr bmask = 0x0000ff00;
-    auto constexpr amask = 0x000000ff;
-#else
-    auto constexpr rmask = 0x000000ff;
-    auto constexpr gmask = 0x0000ff00;
-    auto constexpr bmask = 0x00ff0000;
-    auto constexpr amask = 0xff000000;
-#endif
-
     static void set_letter_glyph(int16 letter)
     {
         // TODO(Cleanup): Add user control over whether or not he wants to autohint fonts!
@@ -169,6 +119,20 @@ namespace platform
 
     static void initialize_font(char const* font_path)
     {
+#if 0
+        // Yeees, you should ask your graphics library for the resolution and
+        // then pass it to FT, but FT defaults are used to be widely used and I
+        // don't see any difference.
+        {
+            real32 ddpi;
+            real32 hdpi;
+            real32 vdpi;
+            auto dpi_request_error = SDL_GetDisplayDPI(0, &ddpi, &hdpi, &vdpi);
+            if(dpi_request_error != 0)
+                PANIC("Could not get the scren dpi!");
+        }
+#endif
+
         // Init the library handle.
         {
             auto error = FT_Init_FreeType(&global::library);
@@ -176,7 +140,6 @@ namespace platform
                 PANIC("Error initializing freetype. Game over... :(");
         }
 
-        // Load the face from the file.
         {
             auto error = FT_New_Face(global::library, font_path, 0, &global::face);
 
@@ -186,54 +149,21 @@ namespace platform
                 PANIC("Font file could not be opened or read, or is just broken");
         }
 
-        // Ask the graphics library for the monitors DPI.
-        float ddpi;
-        float hdpi;
-        float vdpi;
-        auto dpi_request_error = SDL_GetDisplayDPI(0, &ddpi, &hdpi, &vdpi);
-        if(dpi_request_error != 0)
-            PANIC("Could not get the scren dpi!");
-        printf("dpi is: %f x %f\n", static_cast<double>(hdpi), static_cast<double>(vdpi));
-
-
         // For now we do not support unscalable fonts.
         ASSERT(FT_IS_SCALABLE(global::face));
 
-        // This uses the default DPI (for now).
-        auto error = FT_Set_Char_Size(global::face,
-                                      global::font_size * 64, 0,
-                                      0, 0);
-        if(error)
-            PANIC("Setting the error failed.");
+        {
+            auto error = FT_Set_Char_Size(global::face,
+                                          global::font_size * 64, 0,
+                                          0, 0); // Default DPI.
+            if(error)
+                PANIC("Setting the size failed.");
+        }
 
-        /* Get the scalable font metrics for this font */
         auto scale = global::face->size->metrics.y_scale;
         global::font_ascent = FT_CEIL(FT_MulFix(global::face->ascender, scale));
         global::font_descent = FT_CEIL(FT_MulFix(global::face->descender, scale));
         global::line_height = FT_CEIL(FT_MulFix(global::face->height, scale));
-
-#if 0
-        global::font->height  = global::font->ascent - global::font->descent + /* baseline */ 1;
-        font->lineskip = FT_CEIL(FT_MulFix(face->height, scale));
-        font->underline_offset = FT_FLOOR(FT_MulFix(face->underline_position, scale));
-        font->underline_height = FT_FLOOR(FT_MulFix(face->underline_thickness, scale));
-#endif
-
-#if 0
-        scale = face->size->metrics.y_scale;
-        font->ascent  = FT_CEIL(FT_MulFix(face->ascender, scale));
-        font->descent = FT_CEIL(FT_MulFix(face->descender, scale));
-        font->height  = font->ascent - font->descent + /* baseline */ 1;
-        font->lineskip = FT_CEIL(FT_MulFix(face->height, scale));
-        font->underline_offset = FT_FLOOR(FT_MulFix(face->underline_position, scale));
-        font->underline_height = FT_FLOOR(FT_MulFix(face->underline_thickness, scale))
-#endif
-
-#if 0
-        global::line_height = static_cast<int32>(global::face->size->metrics.height) / 64;
-        global::font_ascent = static_cast<int32>(global::face->size->metrics.ascender / 64);
-        global::font_descent = static_cast<int32>(global::face->size->metrics.descender / 64);
-#endif
 
         // TODO: Width is far too much. Height might be too small.
         temp::texture_x_offset = 0;
@@ -265,7 +195,7 @@ namespace platform
             detail::set_letter_glyph(static_cast<int16>(c));
     }
 
-    static void blit_letter(int16 character, int32 clip_height,
+    static void blit_letter(int16 character, uint32 color,
                             int32 X, int32 Y, int32* advance,
                             graphics::rectangle const* viewport_rect)
     {
@@ -287,7 +217,7 @@ namespace platform
             return;
         }
 
-        // If advance was requested, we will this with such information.
+        // If advance was requested, we fill the pointer this with information.
         if(advance)
             *advance = glyph.metrics.advance;
 
@@ -327,7 +257,7 @@ namespace platform
 
 #if 1
         if(sdl_rect.y >= global::screen->h || sdl_rect.x >= global::screen->w)
-            PANIC("Blitting completly outside the surface! This should never happen.");
+            LOG_ERROR("Blitting completly outside the surface! This should never happen.");
 #endif
 
         auto pixels = static_cast<uint32*>(global::screen->pixels);
@@ -354,9 +284,9 @@ namespace platform
                 auto dest_g = (global::background_hex_color & gmask) >> gshift;
                 auto dest_b = (global::background_hex_color & bmask) >> bshift;
 
-                auto source_r = (global::foreground_hex_color & rmask) >> rshift;
-                auto source_g = (global::foreground_hex_color & gmask) >> gshift;
-                auto source_b = (global::foreground_hex_color & bmask) >> bshift;
+                auto source_r = (color & rmask) >> rshift;
+                auto source_g = (color & gmask) >> gshift;
+                auto source_b = (color & bmask) >> bshift;
 
                 auto res_r = (1.0f - alpha_real) * dest_r + alpha_real * source_r;
                 auto res_g = (1.0f - alpha_real) * dest_g + alpha_real * source_g;
@@ -372,6 +302,7 @@ namespace platform
     END:;
     }
 
+#if 0
     // TODO: Handle the copypaste, once it comes to blitting color surfaces.
     static void blit_letter_colored(int16 character, int32 clip_height,
                                     int32 X, int32 Y, int32* advance,
@@ -401,6 +332,7 @@ namespace platform
         }
 #endif
     }
+#endif
 
     // TODO(Cleanup): Make them more safe. The size should be some global setting.
     static int get_letter_width()
@@ -423,9 +355,7 @@ namespace platform
         return global::font_descent;
     }
 
-// TODO(EXPREIMENTAL): When comparing to SumblimeText, we move one pixel too
-//                     much.  With this change it looks much better, but I have
-//                     NO FREAKIN' IDEA WHY!!
+    // Remove cursor drawing from here!
     template<typename STR>
     static void print_text_line(editor::window const* window_ptr,
                                 STR& text,
@@ -444,7 +374,11 @@ namespace platform
         auto cursor_x = X;
         auto cursor_y = Y;
         auto text_len = text.size();
-        for (auto i = 0_u64; i < text_len; ++i)
+
+        // TODO: Still wondering if the second condition is needed. What aboutY?
+        for (auto i = 0_u64;
+             i < text_len && X <= window_ptr->position.x + window_ptr->position.width;
+             ++i)
         {
             auto text_idx = static_cast<int16>(text[i]);
 
@@ -454,11 +388,11 @@ namespace platform
             // TODO: This looks like a reasonable default, doesn't it?
             auto advance = ::platform::get_letter_width();
             if(color)
-                ::platform::blit_letter_colored(text_idx, fixed_height,
+                ::platform::blit_letter(text_idx, 0xFF0000,
                                                 X, Y, &advance,
                                                 &window_ptr->position);
             else
-                ::platform::blit_letter(text_idx, fixed_height,
+                ::platform::blit_letter(text_idx, global::foreground_hex_color,
                                         X, Y, &advance,
                                         &window_ptr->position);
 
@@ -472,8 +406,7 @@ namespace platform
             }
         }
 
-        // TODO: Make sure that the cursor fits in the window.
-        // Draw a cursor.
+        // Draw a cursor:
         if (cursor_idx >= 0)
         {
             auto rect = graphics::rectangle {
