@@ -40,6 +40,7 @@ namespace platform::global
     static int32 font_descent;
 
     static int32 font_size = 14;
+    static int32 linum_horizontal_offset = 20;
     static auto color_scheme = color_scheme_data{ // Monokai color theme.
         0x272822,
         0xF6F6F6,
@@ -241,17 +242,7 @@ namespace platform
              : glyph.texture_height)
         };
 
-#if 0
-        if (FAILED(SDL_BlitSurface(temp::alphabet_texture, &letter_rect,
-                                   global::screen, &sdl_rect)))
-        {
-            PANIC("Bitting surface failed!");
-        }
-#elif 0
-        auto temp_rect = SDL_Rect{ sdl_rect.x, sdl_rect.y, letter_rect.w, letter_rect.h };
-        SDL_FillRect(global::screen, &temp_rect, global::foreground_hex_color);
-#else
-        // TODO: Not sure what to do if this does not work.
+        // TODO: Not sure what to do if it is not the for byte surface.
         ASSERT(global::screen->format->BytesPerPixel == 4);
 
         auto rmask = global::screen->format->Rmask;
@@ -289,8 +280,7 @@ namespace platform
                                  aph_tex_x)) & amask) >> ashift;
                 auto alpha_real = static_cast<real32>(alpha) / 255.0f;
 
-                auto dest_r = (
-                    ::platform::get_curr_scheme().background & rmask) >> rshift;
+                auto dest_r = (::platform::get_curr_scheme().background & rmask) >> rshift;
                 auto dest_g = (::platform::get_curr_scheme().background & gmask) >> gshift;
                 auto dest_b = (::platform::get_curr_scheme().background & bmask) >> bshift;
 
@@ -308,41 +298,8 @@ namespace platform
 
                 *dest = res;
             }
-#endif
     END:;
     }
-
-#if 0
-    // TODO: Handle the copypaste, once it comes to blitting color surfaces.
-    static void blit_letter_colored(int16 character, int32 clip_height,
-                                    int32 X, int32 Y, int32* advance,
-                                    graphics::rectangle const* viewport_rect)
-    {
-        blit_letter(character, clip_height, X, Y, advance, viewport_rect);
-        return;
-#if 0
-        auto glyph = global::alphabet_colored_[character];
-        auto sdl_rect = SDL_Rect {
-            X + glyph.metrics.x_min,
-            Y + glyph.metrics.y_min,
-            10000,
-            10000, // TODO: Who cares about W and H?
-        };
-
-        // If advance was requested, we will this with such information.
-        if(advance)
-            *advance = glyph.metrics.advance;
-
-        if (FAILED(SDL_BlitSurface(glyph.texture,
-                                   nullptr,
-                                   global::screen,
-                                   &sdl_rect)))
-        {
-            PANIC("Bitting surface failed!");
-        }
-#endif
-    }
-#endif
 
     // TODO(Cleanup): It is not java, get rid of getters.
     static int32 get_letter_width()
@@ -412,7 +369,6 @@ namespace platform
                                     &window_ptr->position);
 
             X += advance;
-
 
             if(static_cast<uint64>(cursor_idx) == i + 1)
             {
@@ -488,10 +444,9 @@ namespace platform
             b_point->first_line = b_point->curr_line - number_of_displayed_lines + 1;
         }
 
-        // TODO: Make them global/const?
         auto horizontal_offset = 0;
         auto vertical_offset = 0;
-        auto linum_horizontal_offset = 10;
+        auto linum_horizontal_offset = global::linum_horizontal_offset;
         auto max_linum_digits_visible = std::to_string(
             std::min(b_point->first_line + number_of_displayed_lines +
                      (b_point->starting_from_top ? 1 : 0),
