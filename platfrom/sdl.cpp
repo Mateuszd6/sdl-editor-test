@@ -52,7 +52,10 @@ namespace platform::global
 // TODO: Move or get rid of!
 namespace platform::temp
 {
-    static SDL_Surface* alphabet_texture;
+    static uint8* alphamap;
+    static int32 alphamap_width;
+    static int32 alphamap_height;
+
     static int32 texture_x_offset;
 }
 
@@ -88,33 +91,18 @@ namespace platform::detail
         global::alphabet_[letter].texture_width = w;
         global::alphabet_[letter].texture_height = h;
 
-        auto bitmap = global::face->glyph->bitmap.buffer;
-
-        auto surface = SDL_CreateRGBSurface(0, w, h, 32,
-                                            0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000);
-        if (surface == nullptr)
+        auto bitmap_buffer = global::face->glyph->bitmap.buffer;
+        auto dest_y_offset = 1;
+        for(auto y = 0; y < static_cast<int32>(h); ++y)
         {
-            PANIC("SDL_CreateRGBSurface() failed: %s", SDL_GetError());
-            exit(1);
+            auto src_ptr = bitmap_buffer + y * w;
+            auto dest_ptr = temp::alphamap + temp::texture_x_offset +
+                (dest_y_offset + y) * temp::alphamap_width;
+            for(auto x = 0; x < static_cast<int32>(w); ++x)
+                *dest_ptr++ = *src_ptr++;
         }
 
-        SDL_FillRect(surface, nullptr, ::platform::get_curr_scheme().foreground);
-
-        auto pixels = static_cast<uint8*>(surface->pixels);
-        for(auto x = 0_u32; x < w; ++x)
-            for(auto y = 0_u32; y < h; ++y)
-            {
-                auto alpha = bitmap[y * w + x];
-                auto pixel_ptr = reinterpret_cast<int32*>(pixels + (4 * (y * w + x)));
-                *pixel_ptr |= ::platform::get_curr_scheme().foreground | (alpha << 24);
-            }
-
-        SDL_Rect source_rect{ 0, 0, static_cast<int32>(w), static_cast<int32>(h) };
-        SDL_Rect dest_rect{ temp::texture_x_offset, 1, 0, 0 };
-        SDL_BlitSurface(surface, &source_rect, temp::alphabet_texture, &dest_rect);
-
         temp::texture_x_offset += w + 1;
-        SDL_FreeSurface(surface);
     }
 }
 
@@ -131,14 +119,14 @@ namespace platform
     {
 #if 0
         // Yeees, you should ask your graphics library for the resolution and
-        // then pass it to FT, but FT defaults are used to be widely used and I
-        // don't see any difference.
+        // then pass it to FT, but FT defaults are be widely used and I don't
+        // see any difference, so who cares?
         {
             real32 ddpi;
             real32 hdpi;
             real32 vdpi;
             auto dpi_request_error = SDL_GetDisplayDPI(0, &ddpi, &hdpi, &vdpi);
-            if(dpi_request_error != 0)
+            if(dpi_request_error)
                 PANIC("Could not get the scren dpi!");
         }
 #endif
@@ -177,32 +165,21 @@ namespace platform
 
         // TODO: Width is far too much. Height might be too small.
         temp::texture_x_offset = 0;
-        temp::alphabet_texture = SDL_CreateRGBSurface(
-            SDL_SWSURFACE,
-            (global::line_height + 10) * 200,
-            (global::line_height + 10),
-            32,
-            0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000);
 
-        if (temp::alphabet_texture == nullptr)
-        {
-            PANIC("SDL_CreateRGBSurface() failed: %s", SDL_GetError());
-            exit(1);
-        }
+        // TODO: Width is far too much. Height might be too small.
+        temp::alphamap_width = (global::line_height + 10) * 200;
+        temp::alphamap_height = global::line_height + 10;
+        temp::alphamap = static_cast<uint8*>(malloc(temp::alphamap_width * temp::alphamap_height));
 
-        SDL_FillRect(temp::alphabet_texture, nullptr, ::platform::get_curr_scheme().foreground);
+        // For now we load only ASCII characters.
+        for (auto c = ' '; c < 127; ++c)
+            detail::set_letter_glyph(static_cast<int16>(c));
     }
 
     static void destroy_font()
     {
         // TODO: I dont want to free the font yet.
         return;
-    }
-
-    static void run_font_test()
-    {
-        for (auto c = ' '; c < 127; ++c)
-            detail::set_letter_glyph(static_cast<int16>(c));
     }
 
     static void blit_letter(int16 character, uint32 color,
@@ -248,36 +225,37 @@ namespace platform
         auto rmask = global::screen->format->Rmask;
         auto gmask = global::screen->format->Gmask;
         auto bmask = global::screen->format->Bmask;
-        auto amask = global::screen->format->Amask;
 
         auto rshift = __builtin_ffsll(rmask / 0xFF) - 1;
         auto gshift = __builtin_ffsll(gmask / 0xFF) - 1;
         auto bshift = __builtin_ffsll(bmask / 0xFF) - 1;
-        auto ashift = __builtin_ffsll(amask / 0xFF) - 1;
 
 #if 1
         if(sdl_rect.y >= global::screen->h || sdl_rect.x >= global::screen->w)
             LOG_ERROR("Blitting completly outside the surface! This should never happen.");
 #endif
 
+        // TODO: This really NEEDS a refactor.
+        auto stop = false;
         auto pixels = static_cast<uint32*>(global::screen->pixels);
-        for(int32 y = sdl_rect.y; y < sdl_rect.y + letter_rect.h; ++y)
+        for(int32 y = sdl_rect.y; y < sdl_rect.y + letter_rect.h && !stop; ++y)
             for(int32 x = sdl_rect.x; x < sdl_rect.x + letter_rect.w; ++x)
             {
                 if(x >= global::screen->w)
                     continue;
 
                 if(y >= global::screen->h)
-                    goto END;
+                {
+                    stop = true;
+                    break;
+                }
 
                 auto dest = pixels + y * global::screen->pitch / 4 + x;
 
                 auto aph_tex_x = letter_rect.x + x - sdl_rect.x;
                 auto aph_tex_y = letter_rect.y + y - sdl_rect.y;
 
-                auto alpha = ((*(static_cast<uint32*>(temp::alphabet_texture->pixels) +
-                                 aph_tex_y * temp::alphabet_texture->pitch / 4 +
-                                 aph_tex_x)) & amask) >> ashift;
+                auto alpha = *(temp::alphamap + (aph_tex_y * temp::alphamap_width) + aph_tex_x);
                 auto alpha_real = static_cast<real32>(alpha) / 255.0f;
 
                 auto dest_r = (::platform::get_curr_scheme().background & rmask) >> rshift;
@@ -298,7 +276,6 @@ namespace platform
 
                 *dest = res;
             }
-    END:;
     }
 
     // TODO(Cleanup): It is not java, get rid of getters.
@@ -358,9 +335,6 @@ namespace platform
              ++i)
         {
             auto text_idx = static_cast<int16>(text[i]);
-
-            // TODO: This does not make much sense. Take a look at it!
-            auto fixed_height = window_ptr->position.y + window_ptr->position.height - Y;
 
             // TODO: This looks like a reasonable default, doesn't it?
             auto advance = ::platform::get_letter_width();

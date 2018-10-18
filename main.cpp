@@ -157,8 +157,6 @@ static int ResizeWindow()
 static void InitTextGlobalSutff()
 {
     ::platform::initialize_font("/usr/share/fonts/TTF/DejaVuSansMono.ttf");
-    ::platform::run_font_test();
-    ::platform::destroy_font();
 }
 
 // If traverse is forward, we pick the first window in the subtree of the
@@ -1310,16 +1308,10 @@ int main(void)
         // Validate main window tree structure.
         ASSERT(Validate(::editor::global::windows_arr + 1));
 #endif
-
-#if 0
-        // system("clear");
-        (::editor::global::windows_arr + ::editor::global::current_window_idx)
-            ->buf_point
-            .curr_chunk
-            ->DEBUG_print_state();
-#endif
     }
 
+    // TODO: Move them both to something like platform::save_exit.
     SDL_Quit();
+    ::platform::destroy_font();
     return 0;
 }
