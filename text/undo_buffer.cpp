@@ -2,6 +2,44 @@
 
 void undo_buffer::DEBUG_print_state() const
 {
+    system("clear");
+
+    for(auto i = 0; i < operation_size; ++i)
+    {
+        auto name_insert = "INSERT CHARACTERS";
+        auto name_remove = "REMOVE CHARACTERS";
+        auto name_none = "NONE";
+
+        char const* operation_name;
+        switch(operations[i].operation)
+        {
+            case (NONE):
+                operation_name = name_none;
+                break;
+
+            case (INSERT_CHARACTERS):
+                operation_name = name_insert;
+                break;
+
+            case (REMOVE_CHARACTERS):
+                operation_name = name_remove;
+                break;
+
+            default:
+                UNREACHABLE();
+                break;
+        }
+
+        auto save_ch = operations[i].data_ptr[operations[i].data_size];
+        operations[i].data_ptr[operations[i].data_size] = 0;
+
+        printf("%d: OPERATION: %s with data %s\n",
+               i + 1,
+               operation_name,
+               operations[i].data_ptr);
+
+        operations[i].data_ptr[operations[i].data_size] = save_ch;
+    }
 }
 
 operation_info const* undo_buffer::undo()
@@ -29,6 +67,7 @@ void undo_buffer::add_undo_info(uint64 curr_line,
                                 operation_enum operation,
                                 misc::length_buffer text_buffer_weak_ptr)
 {
+#if 0
     if(operation == current_operation)
     {
         switch(operation)
@@ -58,10 +97,13 @@ void undo_buffer::add_undo_info(uint64 curr_line,
             } return;
 
             case NONE:
-            case REMOVE_CHARACTERS:
-                break;
+                // TODO: Why on earth there is this branch?
+                //       How would I get there?
+                //       Why do I need a NONE operation?
+                UNREACHABLE();
         }
     }
+#endif
 
     // Appending to the back
     operation_index++;
@@ -88,6 +130,16 @@ void undo_buffer::add_undo_info(uint64 curr_line,
     operations[operation_index].data_ptr = data_ptr;
 
     current_operation = operation;
+
+    // TODO: DEBUG STUFF:
+    {
+        auto data = operations[operation_index].data_ptr;
+        auto len = operations[operation_index].data_size;
+        auto save = data[len];
+        data[len] = 0;
+        LOG_WARN("SAVED A OPERATION WITH SATE %d and data %s", operation, data_ptr);
+        data[len] = save;
+    }
 }
 
 void undo_buffer::stop_current_operation()

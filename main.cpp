@@ -962,9 +962,10 @@ static int HandleEvent(const SDL_Event &event)
                 }
             }
 
-#if 0
+#if 1
             current_window->buf_point.buffer_ptr->undo.DEBUG_print_state();
 #endif
+
             ASSERT(current_window->buf_point.point_is_valid());
 #if 0
             printf("Line: %ld\nIndex: %ld",
