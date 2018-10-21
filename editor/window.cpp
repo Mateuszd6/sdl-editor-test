@@ -2,6 +2,9 @@
 #include "../platfrom/platform.hpp"
 #include "../graphics/graphics.hpp"
 
+// TODO: Get rid of this or at least move to some platform - dependent branch.
+#include <unistd.h>
+
 // TODO(Cleanup): Try to use as less globals as possible...
 namespace editor::global
 {
@@ -34,9 +37,6 @@ namespace editor
 
         return global::windows_arr + global::number_of_windows - 1;
     }
-
-// TODO: Get rid of this or at least move to some platform - dependent branch.
-#include <unistd.h>
 
     // TODO(Cleanup): Would be nice to add them using regular, add-window/buffer API.
     static void initialize_first_window()

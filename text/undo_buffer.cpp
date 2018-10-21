@@ -36,10 +36,11 @@ void undo_buffer::add_undo_info(uint64 curr_line,
             case INSERT_CHARACTERS:
             {
 #if 1
-                if(operations[operation_index].data_ptr[operations[operation_index].data_size - 1] != ' '
-                    && text_buffer_weak_ptr.data[0] == ' ')
+                if(!is_word_separator(operations[operation_index]
+                                      .data_ptr[operations[operation_index].data_size - 1])
+                   && is_word_separator(text_buffer_weak_ptr.data[0]))
                 {
-                    // We wont append because we ended up with the space.
+                    // We wont append because we ended up with the word separator.
                     break;
                 }
 #endif

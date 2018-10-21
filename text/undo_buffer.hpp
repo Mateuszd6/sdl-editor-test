@@ -11,8 +11,21 @@
 //       ||raw_char_data|operation_mask|curr_line|curr_idx|data_size||next_data_size|| ...
 //                       ^ Here last_operation points.
 
-const uint64 UNDO_BUFFER_MAX_SIZE = 4000000; // in bytes
-const uint64 UNDO_BUFFER_SIZE = 64 * 1000;
+static constexpr char word_separators[] = " ./\\()\"'-:,.;<>~!@#$%^&*|+=[]{}`~?";
+static constexpr int64 word_separators_len = lengthof(word_separators);
+
+// TODO: Please, not in the header ;(
+static constexpr bool is_word_separator(uint8 ch)
+{
+    for(auto i = 0; i < word_separators_len; ++i)
+        if(word_separators[i] == ch)
+            return true;
+
+    return false;
+}
+
+static const uint64 UNDO_BUFFER_MAX_SIZE = 4000000; // in bytes
+static const uint64 UNDO_BUFFER_SIZE = 64 * 1000;
 
 enum operation_enum
 {

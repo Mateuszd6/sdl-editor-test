@@ -421,6 +421,8 @@ namespace platform
         auto horizontal_offset = 0;
         auto vertical_offset = 0;
         auto linum_horizontal_offset = global::linum_horizontal_offset;
+
+        // TODO: Remove std::to_string call and just use a string literal.
         auto max_linum_digits_visible = std::to_string(
             std::min(b_point->first_line + number_of_displayed_lines +
                      (b_point->starting_from_top ? 1 : 0),

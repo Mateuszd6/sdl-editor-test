@@ -17,6 +17,11 @@
 #include "graphics/graphics.cpp"
 #include "platfrom/platform.cpp"
 
+namespace global
+{
+    static bool redraw_requied;
+}
+
 namespace editor_window_utility::detail
 {
     static void ResizeIthWindowLeft(editor::window* parent_window,
@@ -297,6 +302,7 @@ static int HandleEvent(const SDL_Event &event)
 
         case SDL_KEYDOWN:
         {
+            global::redraw_requied = true;
 #if 0
             // W - Switch window.
             if (event.key.keysym.sym == 119)
@@ -783,15 +789,17 @@ static int HandleEvent(const SDL_Event &event)
                             char buffer[undo_info->data_size + 1];
                             for(auto i = 0_u64; i < undo_info->data_size; ++i)
                                 buffer[i] = undo_info->data_ptr[i];
-                            buffer[undo_info->data_size + 1] = 0_i8;
+                            buffer[undo_info->data_size] = 0_i8;
 
                             for(auto i = 0_u64; i < undo_info->data_size; ++i)
                             {
                                 // Assert that there is a next character in the line.
-                                {
+                               {
+#if 1
                                     current_window->buf_point.curr_idx++;
                                     ASSERT(current_window->buf_point.point_is_valid());
                                     current_window->buf_point.curr_idx--;
+#endif
 
                                     auto gapb = current_window->buf_point.buffer_ptr->get_line(
                                         current_window->buf_point.curr_line);
@@ -954,8 +962,9 @@ static int HandleEvent(const SDL_Event &event)
                 }
             }
 
-
+#if 0
             current_window->buf_point.buffer_ptr->undo.DEBUG_print_state();
+#endif
             ASSERT(current_window->buf_point.point_is_valid());
 #if 0
             printf("Line: %ld\nIndex: %ld",
@@ -1026,6 +1035,7 @@ static int HandleEvent(const SDL_Event &event)
 #if 0
                     LOG_INFO("MSG ---> Window %d shown", event.window.windowID);
 #endif
+                    global::redraw_requied = true;
                 } break;
 
                 case SDL_WINDOWEVENT_HIDDEN:
@@ -1040,6 +1050,7 @@ static int HandleEvent(const SDL_Event &event)
 #if 0
                     LOG_INFO("MSG ---> Window %d exposed", event.window.windowID);
 #endif
+                    global::redraw_requied = true;
                 } break;
 
                 case SDL_WINDOWEVENT_MOVED:
@@ -1059,6 +1070,7 @@ static int HandleEvent(const SDL_Event &event)
                     LOG_INFO("MSG ---> Window %d resized", event.window.windowID);
 #endif
                     ResizeWindow();
+                    global::redraw_requied = true;
                 } break;
 
                 case SDL_WINDOWEVENT_MINIMIZED:
@@ -1300,9 +1312,9 @@ int main(void)
         if (HandleEvent(event))
             break;
 
-        // Move it to some event occurences or make a dirty-bit system.
-        // TODO(Profiling): Redraw window only if something got dirty.
-        ::platform::redraw_window();
+        // TODO: Redraw only dirty windows.
+        if(global::redraw_requied)
+            ::platform::redraw_window();
 
 #ifdef DEBUG
         // Validate main window tree structure.
