@@ -27,16 +27,16 @@ void undo_buffer::DEBUG_print_state() const
 
             default:
                 UNREACHABLE();
-                break;
         }
 
         auto save_ch = operations[i].data_ptr[operations[i].data_size];
         operations[i].data_ptr[operations[i].data_size] = 0;
 
-        printf("%d: OPERATION: %s with data %s\n",
+        printf("%d: OPERATION: %s with data '%s'%s\n",
                i + 1,
                operation_name,
-               operations[i].data_ptr);
+               operations[i].data_ptr,
+               i == operation_index ? " < " : "");
 
         operations[i].data_ptr[operations[i].data_size] = save_ch;
     }
@@ -53,7 +53,7 @@ operation_info const* undo_buffer::undo()
 
 operation_info const* undo_buffer::redo()
 {
-    if(operation_index + 1== operation_size)
+    if(operation_index + 1 == operation_size)
         return nullptr;
 
     current_operation = NONE;
@@ -67,7 +67,7 @@ void undo_buffer::add_undo_info(uint64 curr_line,
                                 operation_enum operation,
                                 misc::length_buffer text_buffer_weak_ptr)
 {
-#if 0
+#if 1
     if(operation == current_operation)
     {
         switch(operation)
