@@ -13,6 +13,7 @@
 #include <ft2build.h>
 #include FT_FREETYPE_H
 #include FT_GLYPH_H
+#include FT_LCD_FILTER_H
 
 #pragma clang diagnostic pop
 
@@ -63,6 +64,11 @@ namespace platform::temp
 #define FT_FLOOR(X) ((X & -64) / 64)
 #define FT_CEIL(X)  (((X + 63) & -64) / 64)
 
+#include <unistd.h>
+#include <fcntl.h>
+
+static SDL_Surface* test_surface;
+
 namespace platform::detail
 {
     static void set_letter_glyph(int16 letter)
@@ -73,12 +79,43 @@ namespace platform::detail
         if(error)
             PANIC("Could not load char! %d", error);
 
-        error = FT_Render_Glyph(global::face->glyph, FT_RENDER_MODE_NORMAL);
+        error = FT_Render_Glyph(global::face->glyph, FT_RENDER_MODE_LCD); // FT_RENDER_MODE_NORMAL
         if(error)
             PANIC("Could not render the glyph bitmap!");
 
         auto w = global::face->glyph->bitmap.width;
         auto h = global::face->glyph->bitmap.rows;
+
+        if(static_cast<char>(letter) == 'E')
+        {
+            printf("W and H: %d x %d\n", w, h);
+            LOG_WARN("Here comes 'A'!");
+
+            test_surface = SDL_CreateRGBSurface(0, w / 3, h, 32, 0x0000FF, 0x00FF00, 0xFF0000, 0);
+            SDL_FillRect(test_surface, nullptr, 0x000000);
+
+            auto buffer = global::face->glyph->bitmap.buffer;
+            ASSERT(w % 3 == 0);
+            for(auto y = 0_u64; y < h; ++y)
+            {
+                for(auto x = 0_u64; x < w / 3; ++x)
+                {
+#if 0
+                    for(int i = 0; i < 4; ++i)
+                    {
+                        * (static_cast<uint8*>(test_surface->pixels) + (y * w / 3 * 4) + x * 4 + i) = 0xFF;
+                    }
+#else
+                    for(auto p = 0; p < 3; ++p)
+                    {
+                        * (static_cast<uint8*>(test_surface->pixels) + (y * w / 3 * 4) + x * 4 + p) =
+                            (* (buffer + (y * (w + 1)) + (3 * x) + p));
+                    }
+#endif
+                }
+            }
+
+        }
 
         // Save the metrics provided by Freetype2 to my metric system.
         // TODO: x_max, y_max!!!
@@ -156,6 +193,14 @@ namespace platform
                                           0, 0); // Default DPI.
             if(error)
                 PANIC("Setting the size failed.");
+        }
+
+        {
+            auto error = FT_Library_SetLcdFilter(global::library,
+                                                 FT_LCD_FILTER_DEFAULT);
+
+            if(error)
+                PANIC("LCD filtering is not enabled.");
         }
 
         auto scale = global::face->size->metrics.y_scale;
@@ -474,6 +519,9 @@ namespace platform
             if(should_break)
                 break;
         }
+
+        SDL_BlitSurface(test_surface, nullptr,
+                        global::screen, nullptr);
 
         SDL_UpdateWindowSurface(::platform::global::window);
         return 0;
