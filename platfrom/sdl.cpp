@@ -74,7 +74,7 @@ namespace platform::detail
     static void set_letter_glyph(int16 letter)
     {
         // TODO(Cleanup): Add user control over whether or not he wants to autohint fonts!
-        auto error = FT_Load_Char(global::face, letter, FT_LOAD_DEFAULT | FT_LOAD_FORCE_AUTOHINT); //
+        auto error = FT_Load_Char(global::face, letter, FT_LOAD_DEFAULT); //
 
         if(error)
             PANIC("Could not load char! %d", error);
@@ -96,7 +96,7 @@ namespace platform::detail
             auto padding = global::face->glyph->bitmap.pitch - w;
 
 
-            test_surface = SDL_CreateRGBSurface(0, w, h, 32, 0xFF0000, 0x00FF00, 0x0000FF, 0);
+            test_surface = SDL_CreateRGBSurface(0, w / 3, h, 32, 0xFF0000, 0x00FF00, 0x0000FF, 0);
             SDL_FillRect(test_surface, nullptr, 0x272822);
 
             auto bitmap = global::face->glyph->bitmap;
