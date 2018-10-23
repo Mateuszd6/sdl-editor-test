@@ -74,27 +74,32 @@ namespace platform::detail
     static void set_letter_glyph(int16 letter)
     {
         // TODO(Cleanup): Add user control over whether or not he wants to autohint fonts!
-        auto error = FT_Load_Char(global::face, letter, FT_LOAD_DEFAULT); // FT_LOAD_FORCE_AUTOHINT
+        auto error = FT_Load_Char(global::face, letter, FT_LOAD_DEFAULT | FT_LOAD_FORCE_AUTOHINT); //
 
         if(error)
             PANIC("Could not load char! %d", error);
 
+#if 1
         error = FT_Render_Glyph(global::face->glyph, FT_RENDER_MODE_LCD); // FT_RENDER_MODE_NORMAL
         if(error)
             PANIC("Could not render the glyph bitmap!");
+#endif
 
         auto w = global::face->glyph->bitmap.width;
         auto h = global::face->glyph->bitmap.rows;
 
-        if(static_cast<char>(letter) == 'E')
+        if(static_cast<char>(letter) == '8')
         {
-            printf("W and H: %d x %d\n", w, h);
+            printf("W and H: %d x %d. PITCH: %d\n", w, h, global::face->glyph->bitmap.pitch);
             LOG_WARN("Here comes 'A'!");
 
-            test_surface = SDL_CreateRGBSurface(0, w / 3, h, 32, 0x0000FF, 0x00FF00, 0xFF0000, 0);
-            SDL_FillRect(test_surface, nullptr, 0x000000);
+            auto padding = global::face->glyph->bitmap.pitch - w;
 
-            auto buffer = global::face->glyph->bitmap.buffer;
+
+            test_surface = SDL_CreateRGBSurface(0, w, h, 32, 0xFF0000, 0x00FF00, 0x0000FF, 0);
+            SDL_FillRect(test_surface, nullptr, 0x272822);
+
+            auto bitmap = global::face->glyph->bitmap;
             ASSERT(w % 3 == 0);
             for(auto y = 0_u64; y < h; ++y)
             {
@@ -106,11 +111,37 @@ namespace platform::detail
                         * (static_cast<uint8*>(test_surface->pixels) + (y * w / 3 * 4) + x * 4 + i) = 0xFF;
                     }
 #else
-                    for(auto p = 0; p < 3; ++p)
+                    uint8 alpha[3];
+                    real32 alpha_real[3];
+
+                    for(int p = 0; p < 3; ++p)
                     {
-                        * (static_cast<uint8*>(test_surface->pixels) + (y * w / 3 * 4) + x * 4 + p) =
-                            (* (buffer + (y * (w + 1)) + (3 * x) + p));
+                        alpha[p] = (* (bitmap.buffer + (y * (w + padding)) + (3 * x) + p));
+                        alpha_real[p]  = static_cast<real32>(alpha[p]) / 255.0f;
                     }
+
+                    auto rshift = __builtin_ffsll(0xFF0000 / 0xFF) - 1;
+                    auto gshift = __builtin_ffsll(0x00FF00 / 0xFF) - 1;
+                    auto bshift = __builtin_ffsll(0x0000FF / 0xFF) - 1;
+
+                    // ::platform::get_curr_scheme().background
+
+                    auto dest_r = (0x272822 & 0xFF0000) >> rshift;
+                    auto dest_g = (0x272822 & 0x00FF00) >> gshift;
+                    auto dest_b = (0x272822 & 0x0000FF) >> bshift;
+
+                    auto source_r = (get_curr_scheme().keyword & 0xFF0000) >> rshift;
+                    auto source_g = (get_curr_scheme().keyword & 0x00FF00) >> gshift;
+                    auto source_b = (get_curr_scheme().keyword & 0x0000FF) >> bshift;
+
+                    auto res_r = (1.0f - alpha_real[0]) * dest_r + alpha_real[0] * source_r;
+                    auto res_g = (1.0f - alpha_real[1]) * dest_g + alpha_real[1] * source_g;
+                    auto res_b = (1.0f - alpha_real[2]) * dest_b + alpha_real[2] * source_b;
+
+                    * reinterpret_cast<uint32*>(static_cast<uint8*>(test_surface->pixels) + (y * test_surface->pitch) + x * 4)
+                        = (static_cast<uint32>(res_r + 0.5f) << rshift) |
+                          (static_cast<uint32>(res_g + 0.5f) << gshift) |
+                          (static_cast<uint32>(res_b + 0.5f) << bshift);
 #endif
                 }
             }
@@ -129,10 +160,12 @@ namespace platform::detail
         global::alphabet_[letter].texture_height = h;
 
         auto bitmap_buffer = global::face->glyph->bitmap.buffer;
+        auto padding = global::face->glyph->bitmap.pitch - w;
+
         auto dest_y_offset = 1;
         for(auto y = 0; y < static_cast<int32>(h); ++y)
         {
-            auto src_ptr = bitmap_buffer + y * w;
+            auto src_ptr = bitmap_buffer + y * (w + padding);
             auto dest_ptr = temp::alphamap + temp::texture_x_offset +
                 (dest_y_offset + y) * temp::alphamap_width;
             for(auto x = 0; x < static_cast<int32>(w); ++x)
@@ -281,10 +314,12 @@ namespace platform
 #endif
 
         // TODO: This really NEEDS a refactor.
+        // No subpixel rednering:
+#if 0
         auto stop = false;
         auto pixels = static_cast<uint32*>(global::screen->pixels);
         for(int32 y = sdl_rect.y; y < sdl_rect.y + letter_rect.h && !stop; ++y)
-            for(int32 x = sdl_rect.x; x < sdl_rect.x + letter_rect.w; ++x)
+            for(int32 x = sdl_rect.x; x < sdl_rect.x + letter_rect.w; x++)
             {
                 if(x >= global::screen->w)
                     continue;
@@ -321,6 +356,60 @@ namespace platform
 
                 *dest = res;
             }
+#else
+        // Subpixel rednering:
+        auto stop = false;
+        auto pixels = static_cast<uint32*>(global::screen->pixels);
+        for(int32 y = sdl_rect.y; y < sdl_rect.y + letter_rect.h && !stop; ++y)
+        {
+            auto x_start = letter_rect.x - 3 * sdl_rect.x;
+            auto y_start = letter_rect.y - sdl_rect.y;
+
+            for(int32 x = sdl_rect.x; x < sdl_rect.x + (letter_rect.w / 3 + 1); x++)
+            {
+                if(x >= global::screen->w)
+                    continue;
+
+                if(y >= global::screen->h)
+                {
+                    stop = true;
+                    break;
+                }
+
+                auto aph_tex_x = x_start + 3 * x;
+                auto aph_tex_y = y_start + y;
+
+                real32 alpha_real[3];
+                for(int p = 0; p < 3; ++p)
+                {
+                    auto alpha = *(temp::alphamap + (aph_tex_y * temp::alphamap_width) + aph_tex_x + p);
+                    alpha_real[p]  = static_cast<real32>(alpha) / 255.0f;
+                }
+
+                auto dest = pixels + y * global::screen->pitch / 4 + x;
+                *dest = color;
+                // continue;
+
+                auto dest_r = (::platform::get_curr_scheme().background & rmask) >> rshift;
+                auto dest_g = (::platform::get_curr_scheme().background & gmask) >> gshift;
+                auto dest_b = (::platform::get_curr_scheme().background & bmask) >> bshift;
+
+                auto source_r = (color & rmask) >> rshift;
+                auto source_g = (color & gmask) >> gshift;
+                auto source_b = (color & bmask) >> bshift;
+
+                auto res_r = (1.0f - alpha_real[0]) * dest_r + alpha_real[0] * source_r;
+                auto res_g = (1.0f - alpha_real[1]) * dest_g + alpha_real[1] * source_g;
+                auto res_b = (1.0f - alpha_real[2]) * dest_b + alpha_real[2] * source_b;
+
+                auto res = ((static_cast<uint32>(res_r + 0.5f) << rshift) |
+                            (static_cast<uint32>(res_g + 0.5f) << gshift) |
+                            (static_cast<uint32>(res_b + 0.5f) << bshift));
+
+                *dest = res;
+            }
+        }
+#endif
     }
 
     // TODO(Cleanup): It is not java, get rid of getters.
