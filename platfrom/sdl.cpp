@@ -50,7 +50,8 @@ namespace platform::global
     };
 }
 
-// TODO: Copied from SDL_TTF. These are used to calculate font metrics correctly.
+// TODO: Copied from SDL_TTF. These are used to calculate font metrics
+//       correctly.
 #define FT_FLOOR(X) ((X & -64) / 64)
 #define FT_CEIL(X)  (((X + 63) & -64) / 64)
 
@@ -78,6 +79,7 @@ namespace platform::detail
         auto w = global::face->glyph->bitmap.width;
         auto h = global::face->glyph->bitmap.rows;
 
+#if 0
         if(static_cast<char>(letter) == '@' || static_cast<char>(letter) == 'W')
         {
             if (test_surface == nullptr)
@@ -131,8 +133,8 @@ namespace platform::detail
                               (static_cast<uint32>(res_b + 0.5f) << bshift));
                 }
             }
-
         }
+#endif
 
         auto bitmap_buffer = global::face->glyph->bitmap.buffer;
         auto pitch = global::face->glyph->bitmap.pitch;
@@ -274,6 +276,17 @@ namespace platform
         auto gshift = __builtin_ffsll(gmask / 0xFF) - 1;
         auto bshift = __builtin_ffsll(bmask / 0xFF) - 1;
 
+
+        auto start_x = std::max(X + glyph.metrics.x_min, viewport_rect->x);
+        auto start_y = Y + glyph.metrics.y_min;
+
+        // TODO: Handle this case correctly.
+        if(viewport_rect->x > Y + glyph.metrics.y_min)
+            return;
+
+        // TODO: Break when reached the boundary of the target (so that text is
+        //       not wrap on the texture).
+
         for(auto y = 0_i32; y < h; ++y)
         {
             for(auto x = 0_i32; x < w / 3; ++x)
@@ -286,8 +299,8 @@ namespace platform
                 }
 
                 auto dest = reinterpret_cast<uint32*>(static_cast<uint8*>(target->pixels) +
-                                                      ((Y + y) * target->pitch) +
-                                                      ((X + x) * 4));
+                                                      ((start_y + y) * target->pitch) +
+                                                      ((start_x + x) * 4));
 
                 auto dest_r = ((* dest) & 0xFF0000) >> rshift;
                 auto dest_g = ((* dest) & 0x00FF00) >> gshift;
