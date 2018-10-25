@@ -88,16 +88,22 @@ namespace platform::detail
         auto w = global::face->glyph->bitmap.width;
         auto h = global::face->glyph->bitmap.rows;
 
-        if(static_cast<char>(letter) == '8')
+        if(static_cast<char>(letter) == '@' || static_cast<char>(letter) == 'W')
         {
+            if (test_surface == nullptr)
+            {
+                test_surface = SDL_CreateRGBSurface(0, 100, h, 32, 0xFF0000, 0x00FF00, 0x0000FF, 0);
+                SDL_FillRect(test_surface, nullptr, 0x272822);
+            }
+
             printf("W and H: %d x %d. PITCH: %d\n", w, h, global::face->glyph->bitmap.pitch);
             LOG_WARN("Here comes 'A'!");
 
-            auto padding = global::face->glyph->bitmap.pitch - w;
+            auto pitch = global::face->glyph->bitmap.pitch;
 
-
-            test_surface = SDL_CreateRGBSurface(0, w / 3, h, 32, 0xFF0000, 0x00FF00, 0x0000FF, 0);
-            SDL_FillRect(test_surface, nullptr, 0x272822);
+            auto x_start = (static_cast<char>(letter) == '@'
+                            ? 2
+                            : global::alphabet_[static_cast<int32>('@')].metrics.advance + 2);
 
             auto bitmap = global::face->glyph->bitmap;
             ASSERT(w % 3 == 0);
@@ -105,19 +111,11 @@ namespace platform::detail
             {
                 for(auto x = 0_u64; x < w / 3; ++x)
                 {
-#if 0
-                    for(int i = 0; i < 4; ++i)
-                    {
-                        * (static_cast<uint8*>(test_surface->pixels) + (y * w / 3 * 4) + x * 4 + i) = 0xFF;
-                    }
-#else
-                    uint8 alpha[3];
                     real32 alpha_real[3];
-
                     for(int p = 0; p < 3; ++p)
                     {
-                        alpha[p] = (* (bitmap.buffer + (y * (w + padding)) + (3 * x) + p));
-                        alpha_real[p]  = static_cast<real32>(alpha[p]) / 255.0f;
+                        auto alpha = (* (bitmap.buffer + (y * pitch) + (3 * x) + p));
+                        alpha_real[p]  = static_cast<real32>(alpha) / 255.0f;
                     }
 
                     auto rshift = __builtin_ffsll(0xFF0000 / 0xFF) - 1;
@@ -126,23 +124,25 @@ namespace platform::detail
 
                     // ::platform::get_curr_scheme().background
 
-                    auto dest_r = (0x272822 & 0xFF0000) >> rshift;
-                    auto dest_g = (0x272822 & 0x00FF00) >> gshift;
-                    auto dest_b = (0x272822 & 0x0000FF) >> bshift;
+                    auto dest = reinterpret_cast<uint32*>(static_cast<uint8*>(test_surface->pixels) +
+                                                          (y * test_surface->pitch) +
+                                                          (x + x_start) * 4);
 
-                    auto source_r = (get_curr_scheme().keyword & 0xFF0000) >> rshift;
-                    auto source_g = (get_curr_scheme().keyword & 0x00FF00) >> gshift;
-                    auto source_b = (get_curr_scheme().keyword & 0x0000FF) >> bshift;
+                    auto dest_r = ((* dest) & 0xFF0000) >> rshift;
+                    auto dest_g = ((* dest) & 0x00FF00) >> gshift;
+                    auto dest_b = ((* dest) & 0x0000FF) >> bshift;
+
+                    auto source_r = (get_curr_scheme().foreground & 0xFF0000) >> rshift;
+                    auto source_g = (get_curr_scheme().foreground & 0x00FF00) >> gshift;
+                    auto source_b = (get_curr_scheme().foreground & 0x0000FF) >> bshift;
 
                     auto res_r = (1.0f - alpha_real[0]) * dest_r + alpha_real[0] * source_r;
                     auto res_g = (1.0f - alpha_real[1]) * dest_g + alpha_real[1] * source_g;
                     auto res_b = (1.0f - alpha_real[2]) * dest_b + alpha_real[2] * source_b;
 
-                    * reinterpret_cast<uint32*>(static_cast<uint8*>(test_surface->pixels) + (y * test_surface->pitch) + x * 4)
-                        = (static_cast<uint32>(res_r + 0.5f) << rshift) |
-                          (static_cast<uint32>(res_g + 0.5f) << gshift) |
-                          (static_cast<uint32>(res_b + 0.5f) << bshift);
-#endif
+                    *dest  = ((static_cast<uint32>(res_r + 0.5f) << rshift) |
+                              (static_cast<uint32>(res_g + 0.5f) << gshift) |
+                              (static_cast<uint32>(res_b + 0.5f) << bshift));
                 }
             }
 
@@ -233,7 +233,7 @@ namespace platform
                                                  FT_LCD_FILTER_DEFAULT);
 
             if(error)
-                PANIC("LCD filtering is not enabled.");
+                LOG_ERROR("LCD filtering is not enabled.");
         }
 
         auto scale = global::face->size->metrics.y_scale;
