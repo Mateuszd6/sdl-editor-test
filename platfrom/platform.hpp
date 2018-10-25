@@ -1,6 +1,7 @@
 #ifndef PLATFORM_PLATFORM_HPP_INCLUDED
 #define PLATFORM_PLATFORM_HPP_INCLUDED
 
+
 namespace platform
 {
     struct glyph_metrics
@@ -14,16 +15,20 @@ namespace platform
         // texture_width/height in glyph_datta which contains this struct. Not a
         // super-design, but glyph_metrics values are explicitly from calling a
         // FT metrics functions, and other values in glyph_data are from the
-        // measuring the texture, which might(FIXME) differ due to the AA.
+        // measuring the texture, which(FIXME) might differ due to the AA.
     };
+
 
     struct glyph_data
     {
-        int32 texture_x_offset;
-        int32 texture_y_offset;
         int32 texture_width;
         int32 texture_height;
+        int32 texture_pitch;
         glyph_metrics metrics;
+
+        // TODO: Use one buffer that contains all info about fonts(or at least
+        // just one face).
+        uint8* texture_buffer;
     };
 
     struct color_scheme_data

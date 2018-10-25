@@ -50,16 +50,6 @@ namespace platform::global
     };
 }
 
-// TODO: Move or get rid of!
-namespace platform::temp
-{
-    static uint8* alphamap;
-    static int32 alphamap_width;
-    static int32 alphamap_height;
-
-    static int32 texture_x_offset;
-}
-
 // TODO: Copied from SDL_TTF. These are used to calculate font metrics correctly.
 #define FT_FLOOR(X) ((X & -64) / 64)
 #define FT_CEIL(X)  (((X + 63) & -64) / 64)
@@ -96,11 +86,7 @@ namespace platform::detail
                 SDL_FillRect(test_surface, nullptr, 0x272822);
             }
 
-            printf("W and H: %d x %d. PITCH: %d\n", w, h, global::face->glyph->bitmap.pitch);
-            LOG_WARN("Here comes 'A'!");
-
             auto pitch = global::face->glyph->bitmap.pitch;
-
             auto x_start = (static_cast<char>(letter) == '@'
                             ? 2
                             : global::alphabet_[static_cast<int32>('@')].metrics.advance + 2);
@@ -148,31 +134,20 @@ namespace platform::detail
 
         }
 
-        // Save the metrics provided by Freetype2 to my metric system.
-        // TODO: x_max, y_max!!!
+        auto bitmap_buffer = global::face->glyph->bitmap.buffer;
+        auto pitch = global::face->glyph->bitmap.pitch;
         auto metrics = global::face->glyph->metrics;
+
+        // TODO: x_max, y_max are not defined. Reasons described in
+        //       glyph_metrics struct definition.
         global::alphabet_[letter].metrics.x_min = static_cast<int>(metrics.horiBearingX) / 64;
         global::alphabet_[letter].metrics.y_min = -static_cast<int>(metrics.horiBearingY) / 64;
         global::alphabet_[letter].metrics.advance = static_cast<int>(metrics.horiAdvance / 64);
-        global::alphabet_[letter].texture_x_offset = temp::texture_x_offset;
-        global::alphabet_[letter].texture_y_offset = 1;
         global::alphabet_[letter].texture_width = w;
         global::alphabet_[letter].texture_height = h;
-
-        auto bitmap_buffer = global::face->glyph->bitmap.buffer;
-        auto padding = global::face->glyph->bitmap.pitch - w;
-
-        auto dest_y_offset = 1;
-        for(auto y = 0; y < static_cast<int32>(h); ++y)
-        {
-            auto src_ptr = bitmap_buffer + y * (w + padding);
-            auto dest_ptr = temp::alphamap + temp::texture_x_offset +
-                (dest_y_offset + y) * temp::alphamap_width;
-            for(auto x = 0; x < static_cast<int32>(w); ++x)
-                *dest_ptr++ = *src_ptr++;
-        }
-
-        temp::texture_x_offset += w + 1;
+        global::alphabet_[letter].texture_pitch = pitch;
+        global::alphabet_[letter].texture_buffer = static_cast<uint8*>(malloc(pitch * h));
+        memcpy(global::alphabet_[letter].texture_buffer, bitmap_buffer, pitch * h);
     }
 }
 
@@ -241,14 +216,6 @@ namespace platform
         global::font_descent = FT_CEIL(FT_MulFix(global::face->descender, scale));
         global::line_height = FT_CEIL(FT_MulFix(global::face->height, scale));
 
-        // TODO: Width is far too much. Height might be too small.
-        temp::texture_x_offset = 0;
-
-        // TODO: Width is far too much. Height might be too small.
-        temp::alphamap_width = (global::line_height + 10) * 200;
-        temp::alphamap_height = global::line_height + 10;
-        temp::alphamap = static_cast<uint8*>(malloc(temp::alphamap_width * temp::alphamap_height));
-
         // For now we load only ASCII characters.
         for (auto c = ' '; c < 127; ++c)
             detail::set_letter_glyph(static_cast<int16>(c));
@@ -264,6 +231,20 @@ namespace platform
                             int32 X, int32 Y, int32* advance,
                             graphics::rectangle const* viewport_rect)
     {
+        auto glypha_data = global::alphabet_[character];
+        auto alpha_bitmap = glypha_data.texture_buffer;
+        auto w = glypha_data.texture_width;
+        auto h = glypha_data.texture_height;
+        auto pitch = glypha_data.texture_pitch;
+
+        // As we do subpixel rendering, we need 3 bytes for each pixel.
+        ASSERT(w % 3 == 0);
+
+        // For now the only target is screen texture, but it might be changed in
+        // the future.
+        auto target = global::screen;
+        ASSERT(target->format->BytesPerPixel == 4);
+
         auto glyph = global::alphabet_[character];
 
         // If we are rendering 'starting from bottom' the last line might be
@@ -286,6 +267,47 @@ namespace platform
         if(advance)
             *advance = glyph.metrics.advance;
 
+        auto rmask = target->format->Rmask;
+        auto gmask = target->format->Gmask;
+        auto bmask = target->format->Bmask;
+        auto rshift = __builtin_ffsll(rmask / 0xFF) - 1;
+        auto gshift = __builtin_ffsll(gmask / 0xFF) - 1;
+        auto bshift = __builtin_ffsll(bmask / 0xFF) - 1;
+
+        for(auto y = 0_i32; y < h; ++y)
+        {
+            for(auto x = 0_i32; x < w / 3; ++x)
+            {
+                real32 alpha_real[3];
+                for(int p = 0; p < 3; ++p)
+                {
+                    auto alpha = (* (alpha_bitmap + (y * pitch) + (3 * x) + p));
+                    alpha_real[p]  = static_cast<real32>(alpha) / 255.0f;
+                }
+
+                auto dest = reinterpret_cast<uint32*>(static_cast<uint8*>(target->pixels) +
+                                                      ((Y + y) * target->pitch) +
+                                                      ((X + x) * 4));
+
+                auto dest_r = ((* dest) & 0xFF0000) >> rshift;
+                auto dest_g = ((* dest) & 0x00FF00) >> gshift;
+                auto dest_b = ((* dest) & 0x0000FF) >> bshift;
+
+                auto source_r = (color & 0xFF0000) >> rshift;
+                auto source_g = (color & 0x00FF00) >> gshift;
+                auto source_b = (color & 0x0000FF) >> bshift;
+
+                auto res_r = (1.0f - alpha_real[0]) * dest_r + alpha_real[0] * source_r;
+                auto res_g = (1.0f - alpha_real[1]) * dest_g + alpha_real[1] * source_g;
+                auto res_b = (1.0f - alpha_real[2]) * dest_b + alpha_real[2] * source_b;
+
+                *dest  = ((static_cast<uint32>(res_r + 0.5f) << rshift) |
+                          (static_cast<uint32>(res_g + 0.5f) << gshift) |
+                          (static_cast<uint32>(res_b + 0.5f) << bshift));
+            }
+        }
+
+#if 0
         // TODO: Calculations are horriebly horrible but they do work at least.
         auto letter_rect = SDL_Rect{
             glyph.texture_x_offset,
@@ -409,6 +431,7 @@ namespace platform
                 *dest = res;
             }
         }
+#endif
 #endif
     }
 
