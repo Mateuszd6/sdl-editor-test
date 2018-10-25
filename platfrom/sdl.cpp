@@ -87,14 +87,15 @@ namespace platform::detail
 
         auto w = global::face->glyph->bitmap.width;
         auto h = global::face->glyph->bitmap.rows;
+        auto padding = global::face->glyph->bitmap.pitch - w;
 
-        if(static_cast<char>(letter) == '8')
+#if 0
+        if(static_cast<char>(letter) == 'r')
         {
             printf("W and H: %d x %d. PITCH: %d\n", w, h, global::face->glyph->bitmap.pitch);
             LOG_WARN("Here comes 'A'!");
 
             auto padding = global::face->glyph->bitmap.pitch - w;
-
 
             test_surface = SDL_CreateRGBSurface(0, w / 3, h, 32, 0xFF0000, 0x00FF00, 0x0000FF, 0);
             SDL_FillRect(test_surface, nullptr, 0x272822);
@@ -130,9 +131,9 @@ namespace platform::detail
                     auto dest_g = (0x272822 & 0x00FF00) >> gshift;
                     auto dest_b = (0x272822 & 0x0000FF) >> bshift;
 
-                    auto source_r = (get_curr_scheme().keyword & 0xFF0000) >> rshift;
-                    auto source_g = (get_curr_scheme().keyword & 0x00FF00) >> gshift;
-                    auto source_b = (get_curr_scheme().keyword & 0x0000FF) >> bshift;
+                    auto source_r = (get_curr_scheme().foreground & 0xFF0000) >> rshift;
+                    auto source_g = (get_curr_scheme().foreground & 0x00FF00) >> gshift;
+                    auto source_b = (get_curr_scheme().foreground & 0x0000FF) >> bshift;
 
                     auto res_r = (1.0f - alpha_real[0]) * dest_r + alpha_real[0] * source_r;
                     auto res_g = (1.0f - alpha_real[1]) * dest_g + alpha_real[1] * source_g;
@@ -145,22 +146,23 @@ namespace platform::detail
 #endif
                 }
             }
-
         }
+#endif
+
+        LOG_INFO("Letter %c: TEX_W = %d, PADD = %d", letter, w, padding);
 
         // Save the metrics provided by Freetype2 to my metric system.
         // TODO: x_max, y_max!!!
         auto metrics = global::face->glyph->metrics;
         global::alphabet_[letter].metrics.x_min = static_cast<int>(metrics.horiBearingX) / 64;
         global::alphabet_[letter].metrics.y_min = -static_cast<int>(metrics.horiBearingY) / 64;
-        global::alphabet_[letter].metrics.advance = static_cast<int>(metrics.horiAdvance / 64);
+        global::alphabet_[letter].metrics.advance = FT_CEIL(metrics.horiAdvance);
         global::alphabet_[letter].texture_x_offset = temp::texture_x_offset;
         global::alphabet_[letter].texture_y_offset = 1;
         global::alphabet_[letter].texture_width = w;
         global::alphabet_[letter].texture_height = h;
 
         auto bitmap_buffer = global::face->glyph->bitmap.buffer;
-        auto padding = global::face->glyph->bitmap.pitch - w;
 
         auto dest_y_offset = 1;
         for(auto y = 0; y < static_cast<int32>(h); ++y)
@@ -172,7 +174,7 @@ namespace platform::detail
                 *dest_ptr++ = *src_ptr++;
         }
 
-        temp::texture_x_offset += w + 1;
+        temp::texture_x_offset += w;
     }
 }
 
@@ -203,6 +205,7 @@ namespace platform
 
         // Init the library handle.
         {
+            // TODO: More in-depth error info.
             auto error = FT_Init_FreeType(&global::library);
             if(error)
                 PANIC("Error initializing freetype. Game over... :(");
@@ -233,7 +236,7 @@ namespace platform
                                                  FT_LCD_FILTER_DEFAULT);
 
             if(error)
-                PANIC("LCD filtering is not enabled.");
+                LOG_ERROR("LCD filtering is not enabled.");
         }
 
         auto scale = global::face->size->metrics.y_scale;
@@ -285,6 +288,9 @@ namespace platform
         // If advance was requested, we fill the pointer this with information.
         if(advance)
             *advance = glyph.metrics.advance;
+
+        if(character == 'w')
+            (*advance) = 10;
 
         // TODO: Calculations are horriebly horrible but they do work at least.
         auto letter_rect = SDL_Rect{
@@ -365,7 +371,7 @@ namespace platform
             auto x_start = letter_rect.x - 3 * sdl_rect.x;
             auto y_start = letter_rect.y - sdl_rect.y;
 
-            for(int32 x = sdl_rect.x; x < sdl_rect.x + (letter_rect.w / 3 + 1); x++)
+            for(int32 x = sdl_rect.x; x < sdl_rect.x + (letter_rect.w / 3); x++)
             {
                 if(x >= global::screen->w)
                     continue;

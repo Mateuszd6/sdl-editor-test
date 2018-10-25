@@ -962,7 +962,7 @@ static int HandleEvent(const SDL_Event &event)
                 }
             }
 
-#if 1
+#if 0
             current_window->buf_point.buffer_ptr->undo.DEBUG_print_state();
 #endif
 
